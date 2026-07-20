@@ -13,6 +13,11 @@ const profileMappingSchema = new mongoose.Schema({
         ref: 'Template',
         required: true
     },
+    targetModel: {
+        type: String,
+        enum: ['WoredaProfile', 'WoredaAssessment', 'HouseholdProfile'],
+        default: 'WoredaProfile'
+    },
     version: { type: Number, default: 1 },
     mappings: [{
         targetFieldPath: { type: String, required: true }, // e.g., 'demographics.total_population'

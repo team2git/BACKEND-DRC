@@ -38,6 +38,24 @@ export const createUser = async (req, res) => {
                 return res.status(403).json({ message: "Branch Admins can only create users for their own branch." });
             }
             transformed.organization = userOrgId;
+
+            // Privilege Escalation Prevention
+            if (transformed.accessLevel === 'super_admin' || (transformed.accessLevel === 'manager' && transformed.organizationType === 'head_office')) {
+                return res.status(403).json({ message: "Branch Admins cannot create Super Admin or Head Office manager accounts." });
+            }
+            if (transformed.organizationType === 'head_office') {
+                return res.status(403).json({ message: "Branch Admins cannot create Head Office accounts." });
+            }
+            if (transformed.roles && transformed.roles.length > 0) {
+                const Role = (await import('../models/Role.js')).default;
+                const assignedRoles = await Role.find({ _id: { $in: transformed.roles } });
+                const hasHeadOfficeRole = assignedRoles.some(role =>
+                    ['super admin', 'superadmin', 'head office', 'head_office'].includes(role.name.toLowerCase()) || role.type === 'head_office'
+                );
+                if (hasHeadOfficeRole) {
+                    return res.status(403).json({ message: "Branch Admins cannot assign Head Office or Super Admin roles." });
+                }
+            }
         }
 
         const user = await userService.createUser(transformed);
@@ -105,6 +123,44 @@ export const updateUser = async (req, res) => {
         // Get 'before' state for audit logging
         const beforeUser = await userService.getUserById(req.params.id);
         if (!beforeUser) return res.status(404).json({ message: 'User not found' });
+
+        // Access Control: Branch Admin restrictions on update
+        const isBranchAdmin = req.user.accessLevel === 'branch_admin' ||
+            (req.user.roles && req.user.roles.some(r => ['Branch Admin', 'branch_admin'].includes(r.name)));
+
+        const isSuperAdmin = req.user.accessLevel === 'super_admin' ||
+            (req.user.roles && req.user.roles.some(r => ['Super Admin', 'super_admin', 'superadmin'].includes(r.name)));
+
+        if (isBranchAdmin && !isSuperAdmin) {
+            const userOrgId = req.user.organization?._id || req.user.organization;
+
+            // 1. Prevent changing organization to other branches
+            if (transformed.organization && String(transformed.organization) !== String(userOrgId)) {
+                return res.status(403).json({ message: "Branch Admins cannot assign users to other branches." });
+            }
+
+            // 2. Prevent setting organizationType to head_office
+            if (transformed.organizationType === 'head_office') {
+                return res.status(403).json({ message: "Branch Admins cannot set organization type to Head Office." });
+            }
+
+            // 3. Prevent setting accessLevel to super_admin or head office manager
+            if (transformed.accessLevel === 'super_admin' || (transformed.accessLevel === 'manager' && transformed.organizationType === 'head_office')) {
+                return res.status(403).json({ message: "Branch Admins cannot grant Super Admin or Head Office manager access." });
+            }
+
+            // 4. Prevent assigning Head Office / Super Admin roles
+            if (transformed.roles && transformed.roles.length > 0) {
+                const Role = (await import('../models/Role.js')).default;
+                const assignedRoles = await Role.find({ _id: { $in: transformed.roles } });
+                const hasHeadOfficeRole = assignedRoles.some(role =>
+                    ['super admin', 'superadmin', 'head office', 'head_office'].includes(role.name.toLowerCase()) || role.type === 'head_office'
+                );
+                if (hasHeadOfficeRole) {
+                    return res.status(403).json({ message: "Branch Admins cannot assign Head Office or Super Admin roles." });
+                }
+            }
+        }
 
         const user = await userService.updateUserById(req.params.id, transformed);
 

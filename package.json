@@ -9,6 +9,7 @@
     "dev": "node --watch server.js",
     "seed:alert-subscription-template": "node scripts/seed_alert_subscription_template.js",
     "seed:household-assessment": "node scripts/seed_household_assessment.js",
+    "seed:woreda-assessment": "node scripts/seed_woreda_assessment.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -44,7 +44,7 @@ export const createDepartment = async (req, res) => {
 
 export const getDepartments = async (req, res) => {
     try {
-        const departments = await departmentService.getAllDepartments();
+        const departments = await departmentService.getAllDepartments(req.dataScope || {});
         res.json(departments.map(formatDepartmentResponse));
     } catch (error) {
         res.status(500).json({ message: error.message });

@@ -9,8 +9,9 @@ import {
 import upload from '../middleware/uploadMiddleware.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { checkPermission } from '../middleware/permissionMiddleware.js';
-import { applyScopeFilter, canAccessUser } from '../middleware/dataScope.js';
+import { applyScopeFilter, canAccessUser, canModifyUser } from '../middleware/dataScope.js';
 import { checkHierarchyLevel } from '../middleware/hierarchyAuth.js';
+import User from '../models/User.js';
 
 // User routes
 const router = express.Router();
@@ -25,7 +26,7 @@ router.post('/',
 router.get('/',
     protect,
     checkPermission('user', 'view'),
-    applyScopeFilter,
+    applyScopeFilter(User),
     getUsers
 );
 
@@ -40,6 +41,7 @@ router.put('/:id',
     protect,
     checkPermission('user', 'update'),
     canAccessUser,
+    canModifyUser,
     upload.single('profileImage'),
     updateUser
 );
@@ -48,6 +50,7 @@ router.delete('/:id',
     protect,
     checkPermission('user', 'delete'),
     canAccessUser,
+    canModifyUser,
     deleteUser
 );
 

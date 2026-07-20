@@ -37,7 +37,7 @@ export const createSector = async (req, res) => {
 
 export const getSectors = async (req, res) => {
     try {
-        const sectors = await sectorService.getAllSectors();
+        const sectors = await sectorService.getAllSectors(req.dataScope || {});
         res.json(sectors.map(formatSectorResponse));
     } catch (error) {
         res.status(500).json({ message: error.message });
