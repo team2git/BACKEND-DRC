@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { normalizeHouseholdToAggregatedSchema } from '../services/SpatialAggregationService.js';
+
 
 const adminLocationSchema = new mongoose.Schema({
     subcity: { type: String, trim: true },
@@ -7,85 +9,6 @@ const adminLocationSchema = new mongoose.Schema({
     block: { type: String, trim: true },
     house_no: { type: String, trim: true }
 });
-
-const householdIdentitySchema = new mongoose.Schema({
-    subcity: { type: String, trim: true },
-    woreda: { type: String, trim: true },
-    kebele: { type: String, trim: true },
-    block: { type: String, trim: true },
-    house_no: { type: String, trim: true },
-    gps_latitude: { type: Number },
-    gps_longitude: { type: Number },
-    enumerator_name: { type: String, trim: true },
-    survey_date: { type: Date },
-    respondent_consent_status: { type: String, enum: ['Yes', 'No', 'Pending', ''] }
-}, { _id: false });
-
-const householdDemographicsSchema = new mongoose.Schema({
-    total_household_members: { type: Number },
-    male_members: { type: Number },
-    female_members: { type: Number },
-    children_0_17: { type: Number },
-    youth_18_29: { type: Number },
-    elderly_60_plus: { type: Number },
-    female_headed_household: { type: String, enum: ['Yes', 'No', ''] },
-    idp_status: { type: String, enum: ['Yes', 'No', 'Unknown', ''] },
-    idp_reason: { type: String, trim: true },
-    education_level_of_head: { type: String, trim: true },
-    employment_status: { type: String, trim: true }
-}, { _id: false });
-
-const householdLivelihoodEconomySchema = new mongoose.Schema({
-    primary_livelihood_type: { type: String, trim: true },
-    secondary_livelihood_type: { type: String, trim: true },
-    household_income_level: { type: String, trim: true },
-    small_business_ownership: { type: String, enum: ['Yes', 'No', ''] },
-    small_business_type: { type: String, trim: true },
-    daily_labour_dependency: { type: String, enum: ['Yes', 'No', ''] },
-    income_disruption_by_disaster: { type: String, trim: true },
-    insurance_coverage: { type: String, enum: ['Yes', 'No', 'Partial', ''] },
-    access_to_credit_safety_nets: { type: String, trim: true }
-}, { _id: false });
-
-const householdHousingSchema = new mongoose.Schema({
-    wall_material_type: { type: String, trim: true },
-    roof_material_type: { type: String, trim: true },
-    building_age_years: { type: Number },
-    building_code_compliance: { type: String, trim: true },
-    informal_settlement: { type: String, enum: ['Yes', 'No', ''] },
-    sleeping_rooms: { type: Number },
-    fire_resistant_materials: { type: String, trim: true },
-    proximity_to_hazard_zone: { type: String, trim: true },
-    drainage_water_electricity_access: { type: String, trim: true }
-}, { _id: false });
-
-const householdPreparednessSchema = new mongoose.Schema({
-    knows_nearest_emergency_shelter: { type: String, enum: ['Yes', 'No', ''] },
-    knows_local_evacuation_route: { type: String, enum: ['Yes', 'No', ''] },
-    drm_training_received_type: { type: String, trim: true },
-    family_emergency_plan_exists: { type: String, enum: ['Yes', 'No', ''] },
-    emergency_supplies_stockpiled: { type: String, enum: ['Yes', 'Partial', 'No', ''] },
-    early_warning_received_channel: { type: String, trim: true },
-    community_awareness_self_rated_1_5: { type: Number }
-}, { _id: false });
-
-const householdRecoveryCapacitySchema = new mongoose.Schema({
-    past_disaster_experience_type: { type: String, trim: true },
-    recovery_duration_months: { type: Number },
-    self_help_savings_group_membership: { type: String, enum: ['Yes', 'No', ''] },
-    government_safety_net_access: { type: String, enum: ['Yes', 'No', ''] },
-    income_diversification_2plus_sources: { type: String, enum: ['Yes', 'No', ''] },
-    resilience_enumerator_assessment_1_5: { type: Number }
-}, { _id: false });
-
-const householdProfileSchema = new mongoose.Schema({
-    identity_location: { type: householdIdentitySchema },
-    demographics: { type: householdDemographicsSchema },
-    livelihood_economy: { type: householdLivelihoodEconomySchema },
-    housing_physical_conditions: { type: householdHousingSchema },
-    preparedness: { type: householdPreparednessSchema },
-    recovery_capacity: { type: householdRecoveryCapacitySchema }
-}, { _id: false });
 
 const demographicsSchema = new mongoose.Schema({
     total_population: { type: Number },
@@ -150,6 +73,8 @@ const communityHazardSchema = new mongoose.Schema({
     hazard_name: { type: String },
     frequency: { type: String },
     severity: { type: String },
+    duration: { type: String },
+    spatial_extent: { type: String },
     seasonality: { type: String },
     historical_events: { type: String }
 });
@@ -296,6 +221,42 @@ const rawSurveySchema = new mongoose.Schema({
     key_informant_interview: { type: rawSurveySectionSchema, default: {} }
 }, { _id: false });
 
+const kiiCapacityIndicatorsSchema = new mongoose.Schema({
+    ews: { type: Number, min: 1, max: 5 },
+    drm_committee: { type: Number, min: 1, max: 5 },
+    focal_persons: { type: Number, min: 1, max: 5 },
+    training_freq: { type: Number, min: 1, max: 5 },
+    shelters: { type: Number, min: 1, max: 5 },
+    community_structures: { type: Number, min: 1, max: 5 },
+    emergency_services: { type: Number, min: 1, max: 5 },
+    inter_sector_coordination: { type: Number, min: 1, max: 5 },
+    institutional_strength: { type: Number, min: 1, max: 5 },
+    recovery_plan: { type: Number, min: 1, max: 5 },
+    budget: { type: Number, min: 1, max: 5 },
+    drm_mainstreaming: { type: Number, min: 1, max: 5 }
+}, { _id: false });
+
+const kiiInfrastructureExposureSchema = new mongoose.Schema({
+    health: { type: Number, min: 1, max: 5 },
+    water: { type: Number, min: 1, max: 5 },
+    energy: { type: Number, min: 1, max: 5 },
+    emergency: { type: Number, min: 1, max: 5 },
+    communications: { type: Number, min: 1, max: 5 }
+}, { _id: false });
+
+const kiiEnvironmentalIndicatorsSchema = new mongoose.Schema({
+    drainage: { type: Number, min: 1, max: 5 },
+    green_cover: { type: Number, min: 1, max: 5 },
+    waste_mgmt: { type: Number, min: 1, max: 5 },
+    pollution: { type: Number, min: 1, max: 5 }
+}, { _id: false });
+
+const cgdCommunityVoiceSchema = new mongoose.Schema({
+    coping_strategies: { type: String, trim: true },
+    collective_action_structure: { type: String, trim: true },
+    suggested_interventions: { type: String, trim: true }
+}, { _id: false });
+
 const woredaProfileSchema = new mongoose.Schema({
     location: { type: adminLocationSchema, required: true },
     assessment_date: { type: Date, required: true },
@@ -306,7 +267,6 @@ const woredaProfileSchema = new mongoose.Schema({
     },
     assessed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     remarks: { type: String },
-    household_profile: { type: householdProfileSchema },
     survey_metadata: { type: surveyMetadataSchema },
     raw_survey: { type: rawSurveySchema },
     demographics: { type: demographicsSchema },
@@ -328,6 +288,10 @@ const woredaProfileSchema = new mongoose.Schema({
     risk_index: { type: riskIndexSchema },
     risk_assessments: [riskAssessmentSchema],
     hierarchy_summary: { type: hierarchySummarySchema },
+    kii_capacity_indicators: { type: kiiCapacityIndicatorsSchema },
+    kii_infrastructure_exposure: { type: kiiInfrastructureExposureSchema },
+    kii_environmental_indicators: { type: kiiEnvironmentalIndicatorsSchema },
+    cgd_community_voice: { type: cgdCommunityVoiceSchema },
     status: {
         type: String,
         enum: ['Draft', 'Submitted', 'Reviewed'],
@@ -350,4 +314,7 @@ woredaProfileSchema.index(
     { unique: true, name: 'unique_location_index' }
 );
 
+
+
 export default mongoose.model('WoredaProfile', woredaProfileSchema);
+

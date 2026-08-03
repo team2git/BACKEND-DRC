@@ -1,4 +1,6 @@
 import WoredaProfile from '../models/WoredaProfile.js';
+import HouseholdProfile from '../models/HouseholdProfile.js';
+import WoredaAssessment from '../models/WoredaAssessment.js';
 import ProfileMapping from '../models/ProfileMapping.js';
 import FormResponse from '../models/FormResponse.js';
 import * as MappingService from '../services/MappingService.js';
@@ -103,9 +105,9 @@ const buildHouseholdHierarchySummary = (profile = {}) => {
 
 const calculateWoredaRiskIndex = (profile = {}) => {
     const h = AggregationService.calculateHazardIndex(profile.hazards);
-    const e = AggregationService.calculateExposureIndex(profile.demographics, profile.critical_facilities, profile.infrastructure_exposure);
-    const v = AggregationService.calculateVulnerabilityIndex(profile);
-    const c = AggregationService.calculateCapacityIndex(profile.community_capacity);
+    const e = AggregationService.calculateExposureIndex(profile.housing_indicators, profile.kii_infrastructure_exposure);
+    const v = AggregationService.calculateVulnerabilityIndex(profile._source_items || [profile], profile.kii_environmental_indicators);
+    const c = AggregationService.calculateCapacityIndex(profile.kii_capacity_indicators);
     const dr = AggregationService.computeRiskScore(h, e, v, c);
 
     return {
@@ -211,16 +213,20 @@ const mergeDirectEnrichment = (computedProfiles, enrichmentProfiles, level) => {
                 risk_index: {
                     ...(profile.risk_index || {}),
                     ...(enrichment.risk_index || {})
-                }
+                },
+                kii_capacity_indicators: enrichment.kii_capacity_indicators || profile.kii_capacity_indicators,
+                kii_infrastructure_exposure: enrichment.kii_infrastructure_exposure || profile.kii_infrastructure_exposure,
+                kii_environmental_indicators: enrichment.kii_environmental_indicators || profile.kii_environmental_indicators,
+                cgd_community_voice: enrichment.cgd_community_voice || profile.cgd_community_voice,
             };
         }
 
         // Apply Woreda Level computation logic: H, E, V, C -> DR
         if (level === 'woreda') {
             const h = AggregationService.calculateHazardIndex(merged.hazards);
-            const e = AggregationService.calculateExposureIndex(merged.demographics, merged.critical_facilities, merged.infrastructure_exposure);
-            const v = AggregationService.calculateVulnerabilityIndex(merged);
-            const c = AggregationService.calculateCapacityIndex(merged.community_capacity);
+            const e = AggregationService.calculateExposureIndex(merged.housing_indicators, merged.kii_infrastructure_exposure);
+            const v = AggregationService.calculateVulnerabilityIndex(profile._source_items || [merged], merged.kii_environmental_indicators);
+            const c = AggregationService.calculateCapacityIndex(merged.kii_capacity_indicators);
             const dr = AggregationService.computeRiskScore(h, e, v, c);
 
             merged.risk_index = {
@@ -242,15 +248,24 @@ const mergeDirectEnrichment = (computedProfiles, enrichmentProfiles, level) => {
     });
 };
 
+
+
 const aggregateProfiles = (profiles, level, sourceLevel = 'household') => {
     const grouped = {};
     const normalizedLevel = normalizeLevel(level);
     const sourceProfiles = getRollupSourceProfiles(profiles, sourceLevel);
 
+    const normalizedSourceProfiles = sourceProfiles.map(p => {
+        if (sourceLevel === 'household') {
+            return AggregationService.normalizeHouseholdToAggregatedSchema(p);
+        }
+        return p;
+    });
+
     // Deduplicate profiles by full location to avoid double counting
     const uniqueProfiles = [];
     const seenLocations = new Set();
-    sourceProfiles.forEach(p => {
+    normalizedSourceProfiles.forEach(p => {
         const sc = (p.location?.subcity || '').toLowerCase().replace(/\bsub[\s-]?city\b/g, '').trim();
         const wo = (p.location?.woreda || '').toLowerCase().replace(/\bworeda\b/g, '').trim();
         const bl = (p.location?.block || '').toLowerCase().replace(/\bblock\b/g, '').trim();
@@ -482,8 +497,7 @@ const aggregateProfiles = (profiles, level, sourceLevel = 'household') => {
             } else if (normalizedLevel === 'woreda') {
                 const woredaStats = AggregationService.aggregateBlockToWoreda(g._source_items);
                 if (woredaStats) {
-                    const povertyRate = g.demographics.total_households > 0 ? (g.demographics.low_income_households / g.demographics.total_households) * 100 : 0;
-                    g.demographics.low_income_households = Math.round(povertyRate); // Storing as rate
+                    // Keep low_income_households as count for correct rollup aggregation
                     Object.keys(g.risk_index).forEach(k => g.risk_index[k] = Math.round(g.risk_index[k] / g._count * 10) / 10);
                 }
             } else if (normalizedLevel === 'subcity') {
@@ -547,23 +561,54 @@ export const getWoredaProfiles = async (req, res) => {
         const { subcity, woreda, block, status, level } = req.query;
         let query = {};
         
+        const buildFlexRegex = (value, type) => {
+            const clean = value.replace(new RegExp(`\\b${type}\\b`, 'ig'), '').trim();
+            const num = parseInt(clean, 10);
+            if (!isNaN(num)) {
+                return new RegExp(`(^|\\D)0*${num}(\\D|$)`, 'i');
+            }
+            return new RegExp(`^${clean}`, 'i');
+        };
+
         if (subcity) query['location.subcity'] = { $regex: new RegExp(`^${subcity.replace(/\bsub[\s-]?city\b/ig, '').trim()}`, 'i') };
-        if (woreda) query['location.woreda'] = { $regex: new RegExp(`^${woreda.replace(/\bworeda\b/ig, '').trim()}`, 'i') };
-        if (block) query['location.block'] = { $regex: new RegExp(`^${block.replace(/\bblock\b/ig, '').trim()}`, 'i') };
+        if (woreda) query['location.woreda'] = { $regex: buildFlexRegex(woreda, 'woreda') };
+        if (block) query['location.block'] = { $regex: buildFlexRegex(block, 'block') };
         
         if (status) query.status = status;
 
-        const profiles = await WoredaProfile.find(query)
-            .sort({ updatedAt: -1 })
-            .populate('assessed_by', 'fullname')
-            .populate('createdBy', 'fullname');
-
         if (['all', 'city', 'subcity', 'woreda', 'block'].includes(level)) {
-            const householdProfiles = getRollupSourceProfiles(profiles, 'household');
-            const directBlockProfiles = profiles.filter(p => getProfileAggregationLevel(p) === 'block');
-            const directWoredaProfiles = profiles.filter(p => getProfileAggregationLevel(p) === 'woreda');
-            const directSubcityProfiles = profiles.filter(p => getProfileAggregationLevel(p) === 'subcity');
-            const directCityProfiles = profiles.filter(p => getProfileAggregationLevel(p) === 'city');
+            // Get raw household profiles from both HouseholdProfile and WoredaProfile collections
+            const householdProfilesFromHP = await HouseholdProfile.find(query)
+                .populate('createdBy', 'fullname');
+            const wpQuery = {
+                ...query,
+                $and: [
+                    {
+                        $or: [
+                            { aggregation_level: 'household' },
+                            { aggregation_level: { $exists: false } },
+                            { aggregation_level: null }
+                        ]
+                    },
+                    { 'location.house_no': { $exists: true, $ne: '', $nin: ['Aggregated Data', 'All Blocks'] } }
+                ]
+            };
+            const householdProfilesFromWP = await WoredaProfile.find(wpQuery)
+                .populate('createdBy', 'fullname');
+            const householdProfiles = [...householdProfilesFromHP, ...householdProfilesFromWP];
+
+            // Get direct woreda assessments from WoredaAssessment collection
+            let woredaQuery = {};
+            if (subcity) woredaQuery['location.subcity'] = { $regex: new RegExp(`^${subcity.replace(/\bsub[\s-]?city\b/ig, '').trim()}`, 'i') };
+            if (woreda) woredaQuery['location.woreda'] = { $regex: buildFlexRegex(woreda, 'woreda') };
+            if (status) woredaQuery.status = status;
+            
+            const directWoredaProfiles = await WoredaAssessment.find(woredaQuery)
+                .populate('createdBy', 'fullname');
+
+            const directBlockProfiles = [];
+            const directSubcityProfiles = [];
+            const directCityProfiles = [];
 
             const blockProfiles = aggregateProfiles(householdProfiles, 'block', 'household');
             const enrichedBlockProfiles = mergeDirectEnrichment(blockProfiles, directBlockProfiles, 'block');
@@ -582,10 +627,32 @@ export const getWoredaProfiles = async (req, res) => {
             return res.json(enrichedCityProfiles);
         }
 
+        // Return raw household profiles from both HouseholdProfile and WoredaProfile collections
+        const householdProfilesFromHP = await HouseholdProfile.find(query)
+            .sort({ updatedAt: -1 })
+            .populate('createdBy', 'fullname');
+        const wpQuery = {
+            ...query,
+            $and: [
+                {
+                    $or: [
+                        { aggregation_level: 'household' },
+                        { aggregation_level: { $exists: false } },
+                        { aggregation_level: null }
+                    ]
+                },
+                { 'location.house_no': { $exists: true, $ne: '', $nin: ['Aggregated Data', 'All Blocks'] } }
+            ]
+        };
+        const householdProfilesFromWP = await WoredaProfile.find(wpQuery)
+            .sort({ updatedAt: -1 })
+            .populate('createdBy', 'fullname');
+        const householdProfiles = [...householdProfilesFromHP, ...householdProfilesFromWP]
+            .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+
         const uniqueHouseholds = [];
         const seen = new Set();
-        const householdSourceProfiles = getRollupSourceProfiles(profiles);
-        for (const p of householdSourceProfiles) {
+        for (const p of householdProfiles) {
             const sc = (p.location?.subcity||'').toLowerCase().replace(/\bsub[\s-]?city\b/g, '').trim();
             const wo = (p.location?.woreda||'').toLowerCase().replace(/\bworeda\b/g, '').trim();
             const bl = (p.location?.block||'').toLowerCase().replace(/\bblock\b/g, '').trim();
@@ -593,7 +660,7 @@ export const getWoredaProfiles = async (req, res) => {
             const hKey = `${sc}-${wo}-${bl}-${hn}`;
             if (!seen.has(hKey)) {
                 seen.add(hKey);
-                uniqueHouseholds.push(p);
+                uniqueHouseholds.push(AggregationService.normalizeHouseholdToAggregatedSchema(p));
             }
         }
         return res.json(uniqueHouseholds);
@@ -605,11 +672,32 @@ export const getWoredaProfiles = async (req, res) => {
 // @desc    Get single Woreda Profile
 export const getWoredaProfileById = async (req, res) => {
     try {
-        const profile = await WoredaProfile.findById(req.params.id)
+        let profile = await WoredaProfile.findById(req.params.id)
             .populate('assessed_by', 'fullname')
             .populate('createdBy', 'fullname');
+            
+        if (!profile) {
+            // Check HouseholdProfile collection
+            profile = await HouseholdProfile.findById(req.params.id)
+                .populate('createdBy', 'fullname');
+        }
+        
+        if (!profile) {
+            // Check WoredaAssessment collection
+            profile = await WoredaAssessment.findById(req.params.id)
+                .populate('createdBy', 'fullname');
+        }
+        
         if (!profile) return res.status(404).json({ message: 'Woreda Profile not found' });
-        res.json(profile);
+        
+        const level = profile.aggregation_level || profile.hierarchy_summary?.aggregation_level || 'household';
+        const isHousehold = level === 'household' || (profile.location?.house_no && profile.location.house_no !== 'Aggregated Data' && profile.location.house_no !== '');
+        
+        if (isHousehold) {
+            res.json(AggregationService.normalizeHouseholdToAggregatedSchema(profile));
+        } else {
+            res.json(profile);
+        }
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -715,7 +803,6 @@ export const importWoredaProfile = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
-
 // @desc    Sync from Interview
 export const syncFromInterview = async (req, res) => {
     try {
@@ -733,15 +820,48 @@ export const syncFromInterview = async (req, res) => {
         transformedData.createdBy = req.user?._id;
         transformedData.assessment_date = response.submittedAt;
         transformedData.status = 'Draft';
-        transformedData.aggregation_level = transformedData.aggregation_level || 'household';
-        transformedData.hierarchy_summary = buildHouseholdHierarchySummary(transformedData);
-        if (transformedData.aggregation_level === 'woreda') {
-            const computed = calculateWoredaRiskIndex(transformedData);
-            transformedData.risk_index = computed.risk_index;
-            transformedData.hierarchy_summary = computed.hierarchy_summary;
+
+        let saved;
+        const target = mapping.targetModel || 'WoredaProfile';
+
+        if (target === 'HouseholdProfile') {
+            if (!transformedData.location) {
+                transformedData.location = {
+                    subcity: response.respondentMetadata?.location?.subcity || '',
+                    woreda: response.respondentMetadata?.location?.woreda || 'Unknown Woreda',
+                    kebele: response.respondentMetadata?.location?.kebele || '',
+                    block: response.respondentMetadata?.location?.block || '',
+                    house_no: response.respondentMetadata?.location?.house_no || ''
+                };
+            }
+            saved = await HouseholdProfile.create(transformedData);
+        } else if (target === 'WoredaAssessment') {
+            if (!transformedData.location) {
+                transformedData.location = {
+                    subcity: response.respondentMetadata?.location?.subcity || '',
+                    woreda: response.respondentMetadata?.location?.woreda || 'Unknown Woreda'
+                };
+            }
+            saved = await WoredaAssessment.create(transformedData);
+        } else {
+            // Legacy WoredaProfile flow
+            transformedData.aggregation_level = transformedData.aggregation_level || 'household';
+            transformedData.hierarchy_summary = buildHouseholdHierarchySummary(transformedData);
+            if (transformedData.aggregation_level === 'woreda') {
+                const computed = calculateWoredaRiskIndex(transformedData);
+                transformedData.risk_index = computed.risk_index;
+                transformedData.hierarchy_summary = computed.hierarchy_summary;
+            }
+            saved = await WoredaProfile.create(transformedData);
         }
-        
-        const saved = await WoredaProfile.create(transformedData);
+
+        // Update the FormResponse sync status
+        response.syncStatus = 'SYNCED';
+        response.lastSyncedAt = new Date();
+        response.moduleContextId = saved._id;
+        response.moduleContextType = target === 'HouseholdProfile' ? 'Household' : (target === 'WoredaAssessment' ? 'Woreda' : 'Feedback');
+        await response.save();
+
         res.status(201).json(saved);
     } catch (error) {
         res.status(500).json({ message: error.message });

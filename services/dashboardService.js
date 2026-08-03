@@ -5,6 +5,14 @@ import Organization from '../models/Organization.js';
 import Sector from '../models/Sector.js';
 import Permission from '../models/Permission.js';
 import RolePermission from '../models/RolePermission.js';
+import WoredaProfile from '../models/WoredaProfile.js';
+import FormResponse from '../models/FormResponse.js';
+import ProfileMapping from '../models/ProfileMapping.js';
+import Template from '../models/Template.js';
+import AuditLog from '../models/AuditLog.js';
+import Team from '../models/Team.js';
+import HouseholdProfile from '../models/HouseholdProfile.js';
+import WoredaAssessment from '../models/WoredaAssessment.js';
 
 /**
  * Get dashboard statistics filtered by user's permissions and hierarchy
@@ -29,6 +37,97 @@ export const getDashboardStats = async (user) => {
             departmentName: user.department?.name || 'N/A'
         }
     };
+
+    // Build filters for WoredaProfile, FormResponse, ProfileMapping, Template, and AuditLog
+    let woredaProfileFilter = {};
+    let formResponseFilter = {};
+    let profileMappingFilter = {};
+    let templateFilter = {};
+    let auditLogFilter = {};
+
+    if (user.accessLevel !== 'super_admin') {
+        const usersInHierarchy = await User.find(filter.user).select('_id');
+        const userIds = usersInHierarchy.map(u => u._id);
+
+        woredaProfileFilter = { 
+            $or: [
+                { createdBy: { $in: userIds } }, 
+                { assessed_by: { $in: userIds } }
+            ] 
+        };
+        formResponseFilter = { submittedBy: { $in: userIds } };
+        profileMappingFilter = { createdBy: { $in: userIds } };
+        templateFilter = { createdBy: { $in: userIds } };
+        auditLogFilter = { userId: { $in: userIds } };
+    }
+
+    // Fetch new counts
+    stats.totalWoredaProfiles = await WoredaProfile.countDocuments(woredaProfileFilter);
+    stats.totalSurveys = await FormResponse.countDocuments(formResponseFilter);
+    stats.totalMappings = await ProfileMapping.countDocuments(profileMappingFilter);
+    stats.totalTemplates = await Template.countDocuments(templateFilter);
+    stats.totalHouseholdProfiles = await HouseholdProfile.countDocuments(woredaProfileFilter);
+    stats.totalWoredaAssessments = await WoredaAssessment.countDocuments(woredaProfileFilter);
+
+    // Woreda Profile status breakdown: Draft, Submitted, Reviewed
+    const woredaStatusAgg = await WoredaProfile.aggregate([
+        { $match: woredaProfileFilter },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+        { $project: { status: '$_id', count: 1, _id: 0 } }
+    ]);
+    stats.woredaByStatus = { Draft: 0, Submitted: 0, Reviewed: 0 };
+    woredaStatusAgg.forEach(item => {
+        if (item.status in stats.woredaByStatus) stats.woredaByStatus[item.status] = item.count;
+    });
+
+    // Template status breakdown: Draft, Published, Archived
+    const templateStatusAgg = await Template.aggregate([
+        { $match: templateFilter },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+        { $project: { status: '$_id', count: 1, _id: 0 } }
+    ]);
+    stats.templatesByStatus = { Draft: 0, Published: 0, Archived: 0 };
+    templateStatusAgg.forEach(item => {
+        if (item.status in stats.templatesByStatus) stats.templatesByStatus[item.status] = item.count;
+    });
+
+    // Mapping status breakdown: Draft, Published, Archived
+    const mappingStatusAgg = await ProfileMapping.aggregate([
+        { $match: profileMappingFilter },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+        { $project: { status: '$_id', count: 1, _id: 0 } }
+    ]);
+    stats.mappingsByStatus = { Draft: 0, Published: 0, Archived: 0 };
+    mappingStatusAgg.forEach(item => {
+        if (item.status in stats.mappingsByStatus) stats.mappingsByStatus[item.status] = item.count;
+    });
+
+    // Survey syncStatus breakdown: SYNCED, UNSYNCED, UPDATED
+    const surveyStatusAgg = await FormResponse.aggregate([
+        { $match: formResponseFilter },
+        { $group: { _id: '$syncStatus', count: { $sum: 1 } } },
+        { $project: { syncStatus: '$_id', count: 1, _id: 0 } }
+    ]);
+    stats.surveysBySyncStatus = { SYNCED: 0, UNSYNCED: 0, UPDATED: 0 };
+    surveyStatusAgg.forEach(item => {
+        if (item.syncStatus in stats.surveysBySyncStatus) stats.surveysBySyncStatus[item.syncStatus] = item.count;
+    });
+
+    // Also fetch user stats for the User Admin tab (always available to super_admin, else scoped)
+    stats.totalUsers = await User.countDocuments(filter.user);
+    stats.totalDepartments = await Department.countDocuments(filter.department);
+    stats.totalRoles = await Role.countDocuments(filter.role);
+    stats.totalOrganizations = await Organization.countDocuments(filter.organization);
+    stats.totalSectors = await Sector.countDocuments(filter.sector);
+    stats.usersByAccessLevel = await getUsersByAccessLevel(filter.user);
+    stats.usersByOrganization = await getUsersByOrganization(filter.user);
+
+    // Fetch recent database changes report (audit logs)
+    stats.recentDatabaseChanges = await AuditLog.find(auditLogFilter)
+        .populate('userId', 'fullname email')
+        .sort({ timestamp: -1 })
+        .limit(10)
+        .lean();
 
     // Only fetch and include data for cards the user has permission to view
     if (permissions.canViewOrganizations) {
