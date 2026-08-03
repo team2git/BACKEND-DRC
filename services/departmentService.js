@@ -5,8 +5,8 @@ export const createDepartment = async (data) => {
     return await department.save();
 };
 
-export const getAllDepartments = async () => {
-    return await Department.find()
+export const getAllDepartments = async (scopeFilter = {}) => {
+    return await Department.find(scopeFilter)
         .populate('organizationId', 'name type')
         .populate('sectorId', 'name')
         .sort({ name: 1 });

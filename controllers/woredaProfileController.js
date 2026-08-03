@@ -157,7 +157,7 @@ const mergeUniqueArrayItems = (target = [], source = [], keyField) => {
 
 const mergeDirectEnrichment = (computedProfiles, enrichmentProfiles, level) => {
     if (!enrichmentProfiles?.length && level !== 'woreda') return computedProfiles;
-    
+
     const map = new Map();
     if (enrichmentProfiles) {
         enrichmentProfiles.forEach(profile => {
@@ -168,7 +168,7 @@ const mergeDirectEnrichment = (computedProfiles, enrichmentProfiles, level) => {
     return computedProfiles.map(profile => {
         const key = getAggregationKey(profile, level);
         const enrichment = map.get(key);
-        
+
         let merged = { ...profile };
         if (enrichment) {
             merged = {
@@ -295,7 +295,7 @@ const aggregateProfiles = (profiles, level, sourceLevel = 'household') => {
         if (normalizedLevel === 'subcity') key = subcity;
         else if (normalizedLevel === 'woreda') key = `${subcity}-${woreda}`;
         else if (normalizedLevel === 'block') key = `${subcity}-${woreda}-${block}`;
-        
+
         if (!grouped[key]) {
             const parentLevel = getParentLevel(normalizedLevel);
             const parentKey = parentLevel === 'city'
@@ -368,7 +368,7 @@ const aggregateProfiles = (profiles, level, sourceLevel = 'household') => {
         const g = grouped[key];
         g._count += 1;
         g._source_items.push(p);
-        
+
         if (new Date(p.assessment_date) > new Date(g.assessment_date)) g.assessment_date = p.assessment_date;
 
         // Demographics
@@ -467,7 +467,7 @@ const aggregateProfiles = (profiles, level, sourceLevel = 'household') => {
             };
 
             g.demographics.unemployment_rate = Math.round(g.demographics.unemployment_rate / g._count);
-            
+
             const totalLivelihoodHH = g.livelihoods.reduce((acc, l) => acc + l.households, 0);
             if (totalLivelihoodHH > 0) {
                 g.livelihoods.forEach(l => l.percentage = Math.round((l.households / totalLivelihoodHH) * 100));
@@ -559,8 +559,8 @@ const aggregateProfiles = (profiles, level, sourceLevel = 'household') => {
 export const getWoredaProfiles = async (req, res) => {
     try {
         const { subcity, woreda, block, status, level } = req.query;
-        let query = {};
-        
+        let query = { ...(req.dataScope || {}) };
+
         const buildFlexRegex = (value, type) => {
             const clean = value.replace(new RegExp(`\\b${type}\\b`, 'ig'), '').trim();
             const num = parseInt(clean, 10);
@@ -573,7 +573,7 @@ export const getWoredaProfiles = async (req, res) => {
         if (subcity) query['location.subcity'] = { $regex: new RegExp(`^${subcity.replace(/\bsub[\s-]?city\b/ig, '').trim()}`, 'i') };
         if (woreda) query['location.woreda'] = { $regex: buildFlexRegex(woreda, 'woreda') };
         if (block) query['location.block'] = { $regex: buildFlexRegex(block, 'block') };
-        
+
         if (status) query.status = status;
 
         if (['all', 'city', 'subcity', 'woreda', 'block'].includes(level)) {
@@ -602,7 +602,7 @@ export const getWoredaProfiles = async (req, res) => {
             if (subcity) woredaQuery['location.subcity'] = { $regex: new RegExp(`^${subcity.replace(/\bsub[\s-]?city\b/ig, '').trim()}`, 'i') };
             if (woreda) woredaQuery['location.woreda'] = { $regex: buildFlexRegex(woreda, 'woreda') };
             if (status) woredaQuery.status = status;
-            
+
             const directWoredaProfiles = await WoredaAssessment.find(woredaQuery)
                 .populate('createdBy', 'fullname');
 
@@ -653,10 +653,10 @@ export const getWoredaProfiles = async (req, res) => {
         const uniqueHouseholds = [];
         const seen = new Set();
         for (const p of householdProfiles) {
-            const sc = (p.location?.subcity||'').toLowerCase().replace(/\bsub[\s-]?city\b/g, '').trim();
-            const wo = (p.location?.woreda||'').toLowerCase().replace(/\bworeda\b/g, '').trim();
-            const bl = (p.location?.block||'').toLowerCase().replace(/\bblock\b/g, '').trim();
-            const hn = (p.location?.house_no||'').toString().toLowerCase().trim();
+            const sc = (p.location?.subcity || '').toLowerCase().replace(/\bsub[\s-]?city\b/g, '').trim();
+            const wo = (p.location?.woreda || '').toLowerCase().replace(/\bworeda\b/g, '').trim();
+            const bl = (p.location?.block || '').toLowerCase().replace(/\bblock\b/g, '').trim();
+            const hn = (p.location?.house_no || '').toString().toLowerCase().trim();
             const hKey = `${sc}-${wo}-${bl}-${hn}`;
             if (!seen.has(hKey)) {
                 seen.add(hKey);
@@ -675,24 +675,24 @@ export const getWoredaProfileById = async (req, res) => {
         let profile = await WoredaProfile.findById(req.params.id)
             .populate('assessed_by', 'fullname')
             .populate('createdBy', 'fullname');
-            
+
         if (!profile) {
             // Check HouseholdProfile collection
             profile = await HouseholdProfile.findById(req.params.id)
                 .populate('createdBy', 'fullname');
         }
-        
+
         if (!profile) {
             // Check WoredaAssessment collection
             profile = await WoredaAssessment.findById(req.params.id)
                 .populate('createdBy', 'fullname');
         }
-        
+
         if (!profile) return res.status(404).json({ message: 'Woreda Profile not found' });
-        
+
         const level = profile.aggregation_level || profile.hierarchy_summary?.aggregation_level || 'household';
         const isHousehold = level === 'household' || (profile.location?.house_no && profile.location.house_no !== 'Aggregated Data' && profile.location.house_no !== '');
-        
+
         if (isHousehold) {
             res.json(AggregationService.normalizeHouseholdToAggregatedSchema(profile));
         } else {
@@ -715,8 +715,8 @@ export const createWoredaProfile = async (req, res) => {
         };
         const existing = await WoredaProfile.findOne(matchCriteria);
         if (existing) {
-            return res.status(400).json({ 
-                message: `Duplicate location detected.` 
+            return res.status(400).json({
+                message: `Duplicate location detected.`
             });
         }
         const profileData = {
@@ -786,9 +786,24 @@ export const deleteWoredaProfile = async (req, res) => {
 // @desc    Get summary stats
 export const getWoredaProfileStats = async (req, res) => {
     try {
-        const total = await WoredaProfile.countDocuments();
-        const totalPop = await WoredaProfile.aggregate([{ $group: { _id: null, sum: { $sum: '$demographics.total_population' } } }]);
-        res.json({ total, totalPopulation: totalPop[0]?.sum || 0 });
+        const scopeFilter = req.dataScope || {};
+        const matchStage = Object.keys(scopeFilter).length > 0 ? [{ $match: scopeFilter }] : [];
+        
+        const [hpTotal, waTotal, wpTotal, hpPop, wpPop] = await Promise.all([
+            HouseholdProfile.countDocuments(scopeFilter),
+            WoredaAssessment.countDocuments(scopeFilter),
+            WoredaProfile.countDocuments(scopeFilter),
+            HouseholdProfile.aggregate([...matchStage, { $group: { _id: null, sum: { $sum: '$demographics.total_household_members' } } }]),
+            WoredaProfile.aggregate([...matchStage, { $group: { _id: null, sum: { $sum: '$demographics.total_population' } } }])
+        ]);
+
+        const totalPopulation = (hpPop[0]?.sum || 0) + (wpPop[0]?.sum || 0);
+        res.json({
+            total: hpTotal + waTotal + wpTotal,
+            totalHouseholdProfiles: hpTotal,
+            totalWoredaAssessments: waTotal,
+            totalPopulation
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -811,7 +826,7 @@ export const syncFromInterview = async (req, res) => {
         if (!response) return res.status(404).json({ message: 'Not found' });
         const mapping = await ProfileMapping.findById(mappingId);
         if (!mapping) return res.status(404).json({ message: 'Not found' });
-        
+
         const answersObj = Object.fromEntries(response.answers);
         const syncResult = MappingService.transformData(answersObj, mapping);
         const transformedData = syncResult.data;
@@ -863,6 +878,184 @@ export const syncFromInterview = async (req, res) => {
         await response.save();
 
         res.status(201).json(saved);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Bulk Import Data into Pending Review Queue
+export const bulkImportData = async (req, res) => {
+    try {
+        const { type, items } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ message: 'No items provided for import' });
+        }
+        const batchId = `BATCH-${Date.now()}`;
+        const createdCount = [];
+
+        for (const item of items) {
+            if (type === 'household') {
+                const subcity = item.Subcity || item.subcity || '';
+                const woreda = item.Woreda || item.woreda || 'Unknown Woreda';
+                const kebele = item.Kebele || item.kebele || '';
+                const block = item.Block || item.block || 'Block 01';
+                const house_no = item['House No'] || item.house_no || `H-${Math.floor(100 + Math.random() * 900)}`;
+
+                const doc = await HouseholdProfile.create({
+                    location: { subcity, woreda, kebele, block, house_no },
+                    assessment_date: item['Survey Date (YYYY-MM-DD)'] || item.survey_date || new Date(),
+                    identity_location: {
+                        subcity, woreda, kebele, block, house_no,
+                        enumerator_name: item['Enumerator Name'] || item.enumerator_name || '',
+                        survey_date: item['Survey Date (YYYY-MM-DD)'] || item.survey_date || new Date(),
+                        respondent_consent_status: item['Consent (Yes/No)'] || item.consent || 'Yes'
+                    },
+                    demographics: {
+                        total_household_members: Number(item['Total Household Members'] || item.family_size || 1),
+                        female_headed_household: item['Female-Headed Household (Yes/No)'] || item.female_headed || 'No',
+                        idp_status: item['IDP Status (Yes/No)'] || item.idp_status || 'No',
+                        employment_status: item['Employment Status'] || item.employment_status || 'Employed'
+                    },
+                    livelihood_economy: {
+                        primary_livelihood_type: item['Primary Livelihood'] || item.livelihood || 'Laborer',
+                        household_income_level: item['Household Income Level'] || item.income_level || 'Low',
+                        small_business_ownership: item['Small Business Ownership (Yes/No)'] || 'No',
+                        daily_labour_dependency: item['Daily Labour Dependency (Yes/No)'] || 'No',
+                        insurance_coverage: item['Insurance Coverage'] || 'No'
+                    },
+                    housing_physical_conditions: {
+                        wall_material_type: item['Wall Material Type'] || 'Wood and Mud',
+                        roof_material_type: item['Roof Material Type'] || 'Corrugated Iron',
+                        building_age_years: Number(item['Building Age (Years)'] || 15),
+                        building_code_compliance: item['Building Code Compliance (Yes/No)'] || 'No',
+                        informal_settlement: item['Informal Settlement (Yes/No)'] || 'No',
+                        proximity_to_hazard_zone: item['Proximity to Hazard Zone (Yes/No)'] || 'No'
+                    },
+                    preparedness: {
+                        knows_nearest_emergency_shelter: item['Knows Emergency Shelter (Yes/No)'] || 'No',
+                        family_emergency_plan_exists: item['Family Emergency Plan (Yes/No)'] || 'No'
+                    },
+                    recovery_capacity: {
+                        government_safety_net_access: item['Government Safety Net Access (Yes/No)'] || 'No'
+                    },
+                    status: 'Pending Review',
+                    import_batch_id: batchId,
+                    createdBy: req.user?._id
+                });
+                createdCount.push(doc);
+            } else {
+                const subcity = item.Subcity || item.subcity || '';
+                const woreda = item.Woreda || item.woreda || 'Unknown Woreda';
+                const doc = await WoredaAssessment.create({
+                    location: { subcity, woreda },
+                    assessment_date: item['Survey Date (YYYY-MM-DD)'] || item.survey_date || new Date(),
+                    remarks: item.Remarks || item.remarks || 'Imported via Excel Batch',
+                    status: 'Pending Review',
+                    import_batch_id: batchId,
+                    createdBy: req.user?._id
+                });
+                createdCount.push(doc);
+            }
+        }
+
+        res.status(201).json({
+            success: true,
+            batchId,
+            count: createdCount.length,
+            message: `Imported ${createdCount.length} records in 'Pending Review' status.`
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Approve or Reject Single Assessment
+export const updateApprovalStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, rejection_reason } = req.body;
+        if (!['Approved', 'Rejected', 'Reviewed', 'Draft', 'Pending Review'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid approval status' });
+        }
+
+        let doc = await HouseholdProfile.findById(id);
+        let collectionType = 'HouseholdProfile';
+
+        if (!doc) {
+            doc = await WoredaAssessment.findById(id);
+            collectionType = 'WoredaAssessment';
+        }
+        if (!doc) {
+            doc = await WoredaProfile.findById(id);
+            collectionType = 'WoredaProfile';
+        }
+
+        if (!doc) return res.status(404).json({ message: 'Assessment record not found' });
+
+        doc.status = status;
+        doc.reviewed_by = req.user?._id;
+        doc.reviewed_at = new Date();
+        if (rejection_reason) doc.rejection_reason = rejection_reason;
+
+        const updated = await doc.save();
+
+        if (status === 'Approved' || status === 'Reviewed') {
+            try {
+                const { triggerScopedAggregation } = await import('../services/aggregationTriggerService.js');
+                await triggerScopedAggregation({
+                    subcity: doc.location?.subcity,
+                    woreda: doc.location?.woreda,
+                    block: doc.location?.block
+                });
+            } catch (aggErr) {
+                console.error('[Approval] Spatial aggregation recalculation failed:', aggErr.message);
+            }
+        }
+
+        res.json(updated);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Approve or Reject Batch Assessments
+export const approveBatch = async (req, res) => {
+    try {
+        const { ids, status, rejection_reason } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ message: 'No record IDs provided' });
+        }
+        if (!['Approved', 'Rejected', 'Reviewed'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid status for batch update' });
+        }
+
+        const updatePayload = {
+            status,
+            reviewed_by: req.user?._id,
+            reviewed_at: new Date(),
+            ...(rejection_reason ? { rejection_reason } : {})
+        };
+
+        const resHP = await HouseholdProfile.updateMany({ _id: { $in: ids } }, updatePayload);
+        const resWA = await WoredaAssessment.updateMany({ _id: { $in: ids } }, updatePayload);
+        const resWP = await WoredaProfile.updateMany({ _id: { $in: ids } }, updatePayload);
+
+        const totalModified = (resHP.modifiedCount || 0) + (resWA.modifiedCount || 0) + (resWP.modifiedCount || 0);
+
+        if (status === 'Approved' || status === 'Reviewed') {
+            try {
+                const { triggerScopedAggregation } = await import('../services/aggregationTriggerService.js');
+                await triggerScopedAggregation({ subcity: null, woreda: null, block: null });
+            } catch (err) {
+                console.error('[BatchApproval] Aggregation failed:', err.message);
+            }
+        }
+
+        res.json({
+            success: true,
+            updatedCount: totalModified,
+            message: `Successfully set ${totalModified} assessments to ${status}.`
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

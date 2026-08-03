@@ -5,16 +5,19 @@ import {
   getIncidentReportById,
   updateIncidentReport,
 } from '../controllers/incidentReportController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/authMiddleware.js';
+import { checkPermission } from '../middleware/permissionMiddleware.js';
+import { applyScopeFilter, checkDocumentAccess } from '../middleware/dataScope.js';
+import IncidentReport from '../models/IncidentReport.js';
 
 const router = express.Router();
 
-// Public submit
+// Public submit (no auth required)
 router.post('/', createIncidentReportPublic);
 
-// Admin management
-router.get('/', protect, admin, listIncidentReports);
-router.get('/:id', protect, admin, getIncidentReportById);
-router.put('/:id', protect, admin, updateIncidentReport);
+// Protected management routes with proper permissions and scoping
+router.get('/', protect, checkPermission('incidentreport', 'view'), applyScopeFilter(IncidentReport), listIncidentReports);
+router.get('/:id', protect, checkPermission('incidentreport', 'view'), checkDocumentAccess(IncidentReport), getIncidentReportById);
+router.put('/:id', protect, checkPermission('incidentreport', 'update'), checkDocumentAccess(IncidentReport), updateIncidentReport);
 
 export default router;

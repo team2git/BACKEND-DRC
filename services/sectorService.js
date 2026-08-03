@@ -5,8 +5,8 @@ export const createSector = async (sectorData) => {
     return await sector.save();
 };
 
-export const getAllSectors = async () => {
-    return await Sector.find().populate('organizationId', 'name type').sort({ name: 1 });
+export const getAllSectors = async (scopeFilter = {}) => {
+    return await Sector.find(scopeFilter).populate('organizationId', 'name type').sort({ name: 1 });
 };
 
 export const getSectorById = async (id) => {

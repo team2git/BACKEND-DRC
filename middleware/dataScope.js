@@ -6,84 +6,166 @@ import Team from '../models/Team.js';
 /**
  * Middleware to apply data scope filtering based on user's hierarchy level
  */
-export const applyScopeFilter = async (req, res, next) => {
-    try {
-        const user = await User.findById(req.user._id)
-            .populate('organization')
-            .populate('sector')
-            .populate('department')
-            .populate('team')
-            .populate('managedDepartments')
-            .populate('managedTeams');
+export const applyScopeFilter = (Model) => {
+    return async (req, res, next) => {
+        try {
+            const user = await User.findById(req.user._id)
+                .populate('organization')
+                .populate('sector')
+                .populate('department')
+                .populate('team')
+                .populate('managedDepartments')
+                .populate('managedTeams');
 
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
+            if (!user) {
+                return res.status(404).json({ message: 'User not found' });
+            }
 
-        // Build scope filter based on access level
-        const scope = {};
+            const scope = {};
 
-        switch (user.accessLevel) {
-            case 'super_admin':
-                // No restrictions - can see everything
-                break;
+            const isSuperAdmin = user.accessLevel === 'super_admin' || 
+                                 (user.accessLevel === 'manager' && user.organizationType === 'head_office');
 
-            case 'manager':
-                if (user.organizationType === 'head_office') {
-                    // Can see all data across organization
+            if (!isSuperAdmin) {
+                const userOrgId = user.organization?._id || user.organization;
+                const branchUserIds = [];
+
+                if (userOrgId) {
+                    const branchUsers = await User.find({ organization: userOrgId }).select('_id');
+                    branchUsers.forEach(u => branchUserIds.push(u._id));
+                }
+
+                // If Model is passed, inspect schema paths for scoping
+                if (Model && Model.schema) {
+                    const paths = Model.schema.paths;
+                    const conditions = [];
+
+                    // 1. Organization boundary
+                    if (paths.organizationId && userOrgId) {
+                        conditions.push({ organizationId: userOrgId });
+                    } else if (paths.organization && userOrgId) {
+                        conditions.push({ organization: userOrgId });
+                    }
+
+                    // 2. Creator boundaries (experts only see their own, managers/admins see branch)
+                    if (user.accessLevel === 'expert') {
+                        if (paths.createdBy) conditions.push({ createdBy: user._id });
+                        if (paths.createdByUser) conditions.push({ createdByUser: user._id });
+                        if (paths.submittedBy) conditions.push({ submittedBy: user._id });
+                        if (paths.assessed_by) conditions.push({ assessed_by: user._id });
+                    } else if (branchUserIds.length > 0) {
+                        if (paths.createdBy) conditions.push({ createdBy: { $in: branchUserIds } });
+                        if (paths.createdByUser) conditions.push({ createdByUser: { $in: branchUserIds } });
+                        if (paths.submittedBy) conditions.push({ submittedBy: { $in: branchUserIds } });
+                        if (paths.assessed_by) conditions.push({ assessed_by: { $in: branchUserIds } });
+                    }
+
+                    if (conditions.length > 0) {
+                        scope.$or = conditions;
+                    } else {
+                        // Fallback if no paths match but user is restricted
+                        scope._id = null; // Matches nothing
+                    }
                 } else {
-                    // Branch manager - only branch data
-                    scope.organization = user.organization._id;
+                    // Fallback to basic organization check if no Model is provided
+                    if (userOrgId) {
+                        scope.organization = userOrgId;
+                    }
                 }
-                break;
+            }
 
-            case 'deputy':
-                // Can see all departments they manage
-                if (user.managedDepartments && user.managedDepartments.length > 0) {
-                    scope.department = { $in: user.managedDepartments.map(d => d._id) };
-                }
-                break;
+            req.dataScope = scope;
+            req.scopedUser = user;
+            next();
+        } catch (error) {
+            res.status(500).json({ message: 'Scope filter failed', error: error.message });
+        }
+    };
+};
 
-            case 'sector_lead':
-                if (user.sector) {
-                    scope.sector = user.sector._id;
-                }
-                break;
+/**
+ * Middleware to check if user has access to a specific document
+ */
+export const checkDocumentAccess = (Model, idParamName = 'id') => {
+    return async (req, res, next) => {
+        try {
+            const docId = req.params[idParamName];
+            if (!docId) {
+                return res.status(400).json({ message: 'Resource ID parameter is required' });
+            }
 
-            case 'branch_admin':
-                // Branch-specific data only
-                scope.organization = user.organization._id;
-                break;
+            if (!req.dataScope) {
+                await new Promise((resolve, reject) => {
+                    applyScopeFilter(Model)(req, res, (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    });
+                });
+            }
 
-            case 'directorate':
-                // Department-specific data
-                if (user.managedDepartments && user.managedDepartments.length > 0) {
-                    scope.department = { $in: user.managedDepartments.map(d => d._id) };
-                } else if (user.department) {
-                    scope.department = user.department._id;
-                }
-                break;
+            const isSuperAdmin = req.scopedUser.accessLevel === 'super_admin' || 
+                                 (req.scopedUser.accessLevel === 'manager' && req.scopedUser.organizationType === 'head_office');
 
-            case 'team_leader':
-                // Team-specific data
-                if (user.managedTeams && user.managedTeams.length > 0) {
-                    scope.team = { $in: user.managedTeams.map(t => t._id) };
-                } else if (user.team) {
-                    scope.team = user.team._id;
-                }
-                break;
+            if (isSuperAdmin) {
+                return next();
+            }
 
-            case 'expert':
-                // Only own data
-                scope.createdBy = user._id;
-                break;
+            const doc = await Model.findOne({ _id: docId, ...req.dataScope });
+            if (!doc) {
+                return res.status(403).json({ message: 'Access denied: Resource not found or belongs to another branch.' });
+            }
+
+            req.targetDocument = doc;
+            next();
+        } catch (error) {
+            res.status(500).json({ message: 'Access check failed', error: error.message });
+        }
+    };
+};
+
+/**
+ * Middleware to check if current user can modify/delete target user based on hierarchy
+ */
+export const canModifyUser = async (req, res, next) => {
+    try {
+        const targetUserId = req.params.id || req.params.userId;
+        if (!targetUserId) {
+            return res.status(400).json({ message: 'User ID is required' });
         }
 
-        req.dataScope = scope;
-        req.scopedUser = user;
+        if (req.user._id.toString() === targetUserId.toString()) {
+            return next();
+        }
+
+        const targetUser = await User.findById(targetUserId);
+        if (!targetUser) {
+            return res.status(404).json({ message: 'Target user not found' });
+        }
+
+        const HIERARCHY_LEVELS = {
+            super_admin: 100,
+            manager: 90,
+            deputy: 80,
+            branch_admin: 75,
+            directorate: 60,
+            team_leader: 40,
+            expert: 20
+        };
+
+        const getHierarchyValue = (level) => HIERARCHY_LEVELS[level] || 0;
+
+        const currentUserLevel = getHierarchyValue(req.user.accessLevel);
+        const targetUserLevel = getHierarchyValue(targetUser.accessLevel);
+
+        if (currentUserLevel <= targetUserLevel) {
+            return res.status(403).json({
+                message: 'Access denied: You cannot modify or delete a user with an equal or higher hierarchy level than yours.'
+            });
+        }
+
         next();
     } catch (error) {
-        res.status(500).json({ message: 'Scope filter failed', error: error.message });
+        res.status(500).json({ message: 'Hierarchy modification check failed', error: error.message });
     }
 };
 

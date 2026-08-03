@@ -3,7 +3,7 @@ import WoredaAssessment from '../models/WoredaAssessment.js';
 export const getWoredaAssessments = async (req, res) => {
     try {
         const { subcity, woreda } = req.query;
-        const query = {};
+        const query = { ...(req.dataScope || {}) };
         if (subcity) query['location.subcity'] = new RegExp(`^${subcity}$`, 'i');
         if (woreda) query['location.woreda'] = new RegExp(`^${woreda}$`, 'i');
 

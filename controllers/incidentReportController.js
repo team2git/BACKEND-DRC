@@ -86,14 +86,14 @@ export const createIncidentReportPublic = async (req, res) => {
 export const listIncidentReports = async (req, res) => {
   try {
     const { status, search, category, severity, reportType, concernCategory } = req.query;
-    const query = {};
+    const query = { ...(req.dataScope || {}) };
     if (status) query.status = status;
     if (reportType) query.reportType = reportType;
     if (category) query.category = category;
     if (concernCategory) query.concernCategory = concernCategory;
     if (severity) query.severity = severity;
     if (search) {
-      query.$or = [
+      const searchOr = [
         { reportCode: { $regex: search, $options: 'i' } },
         { reportType: { $regex: search, $options: 'i' } },
         { category: { $regex: search, $options: 'i' } },
@@ -105,6 +105,13 @@ export const listIncidentReports = async (req, res) => {
         { 'location.city': { $regex: search, $options: 'i' } },
         { 'location.region': { $regex: search, $options: 'i' } },
       ];
+      // Merge search $or with any existing dataScope $or using $and to avoid collision
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchOr }];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
     }
 
     const docs = await IncidentReport.find(query).sort({ updatedAt: -1 }).lean();

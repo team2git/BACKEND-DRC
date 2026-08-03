@@ -54,7 +54,7 @@ const woredaAssessmentSchema = new mongoose.Schema({
     assessment_date: { type: Date, required: true },
     assessed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     remarks: { type: String },
-    
+
     // CGD Data
     hazards: [communityHazardSchema],
     cgd_community_voice: { type: cgdCommunityVoiceSchema },

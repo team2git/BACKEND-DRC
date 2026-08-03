@@ -2,7 +2,9 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/authMiddleware.js';
+import { checkPermission } from '../middleware/permissionMiddleware.js';
+
 import { fileURLToPath } from 'url';
 
 const router = express.Router();
@@ -59,7 +61,7 @@ const inspectionStorage = multer.diskStorage({
 
 const inspectionUpload = multer({ storage: inspectionStorage });
 
-router.post('/portal-image', protect, admin, upload.single('file'), (req, res) => {
+router.post('/portal-image', protect, checkPermission('portalcontent', 'update'), upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
