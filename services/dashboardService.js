@@ -62,22 +62,38 @@ export const getDashboardStats = async (user) => {
     }
 
     // Fetch new counts
-    stats.totalWoredaProfiles = await WoredaProfile.countDocuments(woredaProfileFilter);
+    const totalHP = await HouseholdProfile.countDocuments(woredaProfileFilter);
+    const totalWA = await WoredaAssessment.countDocuments(woredaProfileFilter);
+    const totalWP = await WoredaProfile.countDocuments(woredaProfileFilter);
+
+    stats.totalHouseholdProfiles = totalHP;
+    stats.totalWoredaAssessments = totalWA;
+    stats.totalWoredaProfiles = totalHP + totalWA + totalWP;
     stats.totalSurveys = await FormResponse.countDocuments(formResponseFilter);
     stats.totalMappings = await ProfileMapping.countDocuments(profileMappingFilter);
     stats.totalTemplates = await Template.countDocuments(templateFilter);
-    stats.totalHouseholdProfiles = await HouseholdProfile.countDocuments(woredaProfileFilter);
-    stats.totalWoredaAssessments = await WoredaAssessment.countDocuments(woredaProfileFilter);
 
-    // Woreda Profile status breakdown: Draft, Submitted, Reviewed
-    const woredaStatusAgg = await WoredaProfile.aggregate([
-        { $match: woredaProfileFilter },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-        { $project: { status: '$_id', count: 1, _id: 0 } }
+    // Profile status breakdown: Draft, Submitted, Reviewed (combining HouseholdProfile, WoredaAssessment, and WoredaProfile)
+    const [hpStatusAgg, waStatusAgg, wpStatusAgg] = await Promise.all([
+        HouseholdProfile.aggregate([
+            { $match: woredaProfileFilter },
+            { $group: { _id: '$status', count: { $sum: 1 } } }
+        ]),
+        WoredaAssessment.aggregate([
+            { $match: woredaProfileFilter },
+            { $group: { _id: '$status', count: { $sum: 1 } } }
+        ]),
+        WoredaProfile.aggregate([
+            { $match: woredaProfileFilter },
+            { $group: { _id: '$status', count: { $sum: 1 } } }
+        ])
     ]);
     stats.woredaByStatus = { Draft: 0, Submitted: 0, Reviewed: 0 };
-    woredaStatusAgg.forEach(item => {
-        if (item.status in stats.woredaByStatus) stats.woredaByStatus[item.status] = item.count;
+    [...hpStatusAgg, ...waStatusAgg, ...wpStatusAgg].forEach(item => {
+        const st = item._id;
+        if (st && st in stats.woredaByStatus) {
+            stats.woredaByStatus[st] += item.count;
+        }
     });
 
     // Template status breakdown: Draft, Published, Archived
