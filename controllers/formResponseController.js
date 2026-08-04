@@ -84,14 +84,15 @@ export const getResponses = async (req, res) => {
         const { templateId, moduleContextId, moduleContextType, isDraft } = req.query;
         let query = {};
 
-        if (templateId) query.templateId = templateId;
+        if (templateId && templateId !== 'all') query.templateId = templateId;
         if (moduleContextId) query.moduleContextId = moduleContextId;
         if (moduleContextType) query.moduleContextType = moduleContextType;
         if (typeof isDraft !== 'undefined') query.isDraft = isDraft === 'true';
 
         const responses = await FormResponse.find(query)
             .sort({ createdAt: -1 })
-            .populate('submittedBy', 'fullname');
+            .populate('submittedBy', 'fullname name email')
+            .populate('templateId', 'name title category version modules');
 
         res.json(responses);
     } catch (error) {
