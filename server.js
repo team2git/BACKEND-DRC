@@ -32,6 +32,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import adminLogRoutes from './routes/adminLogRoutes.js';
 import emailLogRoutes from './routes/emailLogRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
+import siteSurveyRoutes from './routes/siteSurveyRoutes.js';
 import { seedDefaultLocations } from './controllers/locationController.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 
@@ -101,6 +102,7 @@ app.use('/api/locations', locationRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/admin-logs', adminLogRoutes);
 app.use('/api/email-logs', emailLogRoutes);
+app.use('/api/site-survey', siteSurveyRoutes);
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // Diagnostic for FormResponse model

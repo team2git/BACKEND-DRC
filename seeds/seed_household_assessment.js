@@ -70,7 +70,9 @@ const buildTemplateAndMapping = () => {
               label: 'GPS Latitude',
               type: 'number',
               required: false,
-              helpText: 'Decimal latitude coordinate'
+              readOnly: true,
+              systemAutoFill: 'gps_latitude',
+              helpText: 'Auto-detected device latitude coordinate'
             },
             {
               fieldId: oid(),
@@ -78,7 +80,9 @@ const buildTemplateAndMapping = () => {
               label: 'GPS Longitude',
               type: 'number',
               required: false,
-              helpText: 'Decimal longitude coordinate'
+              readOnly: true,
+              systemAutoFill: 'gps_longitude',
+              helpText: 'Auto-detected device longitude coordinate'
             },
             {
               fieldId: oid(),
