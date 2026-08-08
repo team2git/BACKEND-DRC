@@ -137,6 +137,14 @@ export const canModifyUser = async (req, res, next) => {
             return next();
         }
 
+        // Super admin can modify any user
+        const isSuperAdmin = req.user.accessLevel === 'super_admin' ||
+            (req.user.roles && req.user.roles.some(r => ['superadmin', 'super admin', 'super_admin'].includes(r.name.toLowerCase())));
+        
+        if (isSuperAdmin) {
+            return next();
+        }
+
         const targetUser = await User.findById(targetUserId);
         if (!targetUser) {
             return res.status(404).json({ message: 'Target user not found' });

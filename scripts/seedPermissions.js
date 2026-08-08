@@ -24,6 +24,12 @@ const permissionsList = [
     { name: 'role_view', resource: 'Role', action: 'view' },
     { name: 'role_update', resource: 'Role', action: 'update' },
     { name: 'role_delete', resource: 'Role', action: 'delete' },
+
+    // Site Survey
+    { name: 'sitesurvey_create', resource: 'sitesurvey', action: 'create' },
+    { name: 'sitesurvey_view', resource: 'sitesurvey', action: 'view' },
+    { name: 'sitesurvey_update', resource: 'sitesurvey', action: 'update' },
+    { name: 'sitesurvey_delete', resource: 'sitesurvey', action: 'delete' },
 ];
 
 const seed = async () => {
