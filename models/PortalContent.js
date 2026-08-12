@@ -112,6 +112,24 @@ const PortalContentSchema = new mongoose.Schema(
       subheading: { type: String, trim: true, default: '' },
       services: { type: [PortalServiceSchema], default: [] },
     },
+    newsSection: {
+      heading: { type: String, trim: true, default: '' },
+      subheading: { type: String, trim: true, default: '' },
+      items: {
+        type: [
+          new mongoose.Schema(
+            {
+              title: { type: String, trim: true, default: '' },
+              description: { type: String, trim: true, default: '' },
+              href: { type: String, trim: true, default: '' },
+              disabled: { type: Boolean, default: false },
+            },
+            { _id: false }
+          ),
+        ],
+        default: [],
+      },
+    },
     services: { type: [PortalServiceSchema], default: [] },
     contact: {
       email: { type: String, trim: true, default: '' },
