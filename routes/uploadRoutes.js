@@ -81,32 +81,28 @@ router.post('/news-media', newsUpload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  res.json({ url: `${baseUrl}/uploads/news/${req.file.filename}` });
+  res.json({ url: `/api/uploads/news/${req.file.filename}` });
 });
 
 router.post('/portal-image', protect, checkPermission('portalcontent', 'update'), upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  res.json({ url: `${baseUrl}/uploads/portal/${req.file.filename}` });
+  res.json({ url: `/api/uploads/portal/${req.file.filename}` });
 });
 
 router.post('/incident-media', incidentUpload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  res.json({ url: `${baseUrl}/uploads/incidents/${req.file.filename}` });
+  res.json({ url: `/api/uploads/incidents/${req.file.filename}` });
 });
 
 router.post('/inspection-certificate', protect, inspectionUpload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  res.json({ url: `${baseUrl}/uploads/inspection-certificates/${req.file.filename}` });
+  res.json({ url: `/api/uploads/inspection-certificates/${req.file.filename}` });
 });
 
 export default router;

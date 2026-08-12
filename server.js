@@ -73,8 +73,13 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static files from uploads directory (both /uploads and /api/uploads for Nginx/reverse proxy compatibility)
+const uploadsDirectory = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDirectory)) {
+  fs.mkdirSync(uploadsDirectory, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDirectory));
+app.use('/api/uploads', express.static(uploadsDirectory));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

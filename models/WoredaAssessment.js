@@ -46,6 +46,19 @@ const cgdCommunityVoiceSchema = new mongoose.Schema({
     suggested_interventions: { type: String, trim: true }
 }, { _id: false });
 
+const disasterRecordSchema = new mongoose.Schema({
+    year: { type: Number, required: true },
+    hazard_name: { type: String, required: true, trim: true },
+    location_description: { type: String, trim: true },
+    affected_population: { type: Number, default: 0 },
+    displaced_population: { type: Number, default: 0 },
+    deaths: { type: Number, default: 0 },
+    injuries: { type: Number, default: 0 },
+    houses_damaged: { type: Number, default: 0 },
+    infrastructure_damaged: { type: String, trim: true },
+    estimated_loss_etb: { type: Number, default: 0 }
+}, { _id: false });
+
 const woredaAssessmentSchema = new mongoose.Schema({
     location: {
         subcity: { type: String, trim: true },
@@ -58,6 +71,7 @@ const woredaAssessmentSchema = new mongoose.Schema({
     // CGD Data
     hazards: [communityHazardSchema],
     cgd_community_voice: { type: cgdCommunityVoiceSchema },
+    disaster_history: [disasterRecordSchema],
 
     // KII Data
     kii_capacity_indicators: { type: kiiCapacityIndicatorsSchema },

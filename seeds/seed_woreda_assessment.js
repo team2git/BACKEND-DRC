@@ -296,10 +296,13 @@ const main = async () => {
 
   const { template, mapping } = buildTemplateAndMapping();
 
+  // Strip _id so upsert doesn't try to modify the immutable field
+  const { _id: _tid, ...templateBody } = template;
+
   // Upsert template
   const savedTemplate = await Template.findOneAndUpdate(
     { name: template.name },
-    { $set: template },
+    { $set: templateBody },
     { upsert: true, new: true }
   );
   console.log('Successfully seeded Woreda Template v1:', savedTemplate.name, `(${savedTemplate._id})`);
@@ -307,10 +310,13 @@ const main = async () => {
   // Update mapping sourceId to match the upserted template
   mapping.sourceId = savedTemplate._id;
 
+  // Strip _id so upsert doesn't try to modify the immutable field
+  const { _id: _mid, ...mappingBody } = mapping;
+
   // Upsert Profile Mapping
   const savedMapping = await ProfileMapping.findOneAndUpdate(
     { name: mapping.name },
-    { $set: mapping },
+    { $set: mappingBody },
     { upsert: true, new: true }
   );
   console.log('Successfully seeded Woreda Mapping:', savedMapping.name, `(${savedMapping._id})`);
