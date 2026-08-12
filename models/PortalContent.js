@@ -115,6 +115,7 @@ const PortalContentSchema = new mongoose.Schema(
     newsSection: {
       heading: { type: String, trim: true, default: '' },
       subheading: { type: String, trim: true, default: '' },
+      tickerText: { type: String, trim: true, default: '' },
       items: {
         type: [
           new mongoose.Schema(
