@@ -9,7 +9,10 @@ export const getTemplates = async (req, res) => {
         const { category, status, search } = req.query;
         let query = {};
 
-        if (status === 'Archived') {
+        // If unauthenticated public request, restrict to Published active templates
+        if (!req.user) {
+            query = { isDeleted: false, status: 'Published' };
+        } else if (status === 'Archived') {
             // Include both "Archived" status and soft-deleted templates
             query = {
                 $or: [
@@ -42,6 +45,10 @@ export const getTemplateById = async (req, res) => {
         const template = await Template.findById(req.params.id).populate('createdBy', 'fullname');
         if (!template) {
             return res.status(404).json({ message: 'Template not found' });
+        }
+        // If unauthenticated, only allow viewing published active templates
+        if (!req.user && (template.isDeleted || template.status !== 'Published')) {
+            return res.status(403).json({ message: 'Template is not published' });
         }
         res.json(template);
     } catch (error) {

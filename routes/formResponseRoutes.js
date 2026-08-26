@@ -7,14 +7,14 @@ import {
     deleteResponse,
     exportToCSV
 } from '../controllers/formResponseController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, optionalAuth } from '../middleware/authMiddleware.js';
 import { checkPermission } from '../middleware/permissionMiddleware.js';
 import { applyScopeFilter, checkDocumentAccess } from '../middleware/dataScope.js';
 import FormResponse from '../models/FormResponse.js';
 
 const router = express.Router();
 
-router.post('/', protect, checkPermission('formresponse', 'create'), submitResponse);
+router.post('/', optionalAuth, submitResponse);
 router.get('/', protect, checkPermission('formresponse', 'view'), applyScopeFilter(FormResponse), getResponses);
 router.get('/export/:templateId', protect, checkPermission('formresponse', 'view'), exportToCSV);
 router.get('/:id', protect, checkPermission('formresponse', 'view'), checkDocumentAccess(FormResponse), getResponseById);

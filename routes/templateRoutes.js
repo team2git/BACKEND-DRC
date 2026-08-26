@@ -13,16 +13,16 @@ import {
     deleteTemplatePermanent
 } from '../controllers/templateController.js';
 import { importWordTemplate } from '../controllers/importController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, optionalAuth } from '../middleware/authMiddleware.js';
 import { checkPermission } from '../middleware/permissionMiddleware.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-router.get('/', protect, checkPermission('template', 'view'), getTemplates);
+router.get('/', optionalAuth, getTemplates);
 router.post('/', protect, checkPermission('template', 'create'), createTemplate);
 router.post('/import-word', protect, checkPermission('template', 'import'), upload.single('file'), importWordTemplate); 
-router.get('/:id', protect, checkPermission('template', 'view'), getTemplateById);
+router.get('/:id', optionalAuth, getTemplateById);
 router.put('/:id', protect, checkPermission('template', 'update'), updateTemplate);
 router.post('/:id/publish', protect, checkPermission('template', 'update'), publishTemplate);
 router.post('/:id/revert-to-draft', protect, checkPermission('template', 'update'), revertToDraft);

@@ -43,3 +43,21 @@ export const admin = (req, res, next) => {
         res.status(403).json({ message: 'Not authorized as an admin' });
     }
 };
+
+// Middleware for routes accessible to both public and authenticated users
+export const optionalAuth = async (req, res, next) => {
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        const token = req.headers.authorization.split(' ')[1];
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            const user = await userService.getUserById(decoded.id);
+            if (user && user.status === 'active') {
+                user.passwordHash = undefined;
+                req.user = user;
+            }
+        } catch (err) {
+            // Ignore token verification errors for optional auth
+        }
+    }
+    next();
+};
