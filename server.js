@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -17,6 +18,7 @@ import hierarchyRoutes from './routes/hierarchyRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import liveDashboardRoutes from './routes/liveDashboardRoutes.js';
 import templateRoutes from './routes/templateRoutes.js';
 import formResponseRoutes from './routes/formResponseRoutes.js';
 import woredaProfileRoutes from './routes/woredaProfileRoutes.js';
@@ -34,12 +36,16 @@ import adminLogRoutes from './routes/adminLogRoutes.js';
 import emailLogRoutes from './routes/emailLogRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
 import siteSurveyRoutes from './routes/siteSurveyRoutes.js';
+import helpArticleRoutes from './routes/helpArticleRoutes.js';
 import { seedDefaultLocations } from './controllers/locationController.js';
+import { seedDefaultHelpArticles } from './controllers/helpArticleController.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
+import { initSocket } from './services/socketService.js';
 
 dotenv.config();
 connectDB().then(() => {
     seedDefaultLocations();
+    seedDefaultHelpArticles();
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -93,6 +99,7 @@ app.use('/api/hierarchy', hierarchyRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/live-dashboard', liveDashboardRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/responses', formResponseRoutes);
 app.use('/api/woreda-profiles', woredaProfileRoutes);
@@ -111,25 +118,17 @@ app.use('/api/admin/news', newsRoutes);
 app.use('/api/admin-logs', adminLogRoutes);
 app.use('/api/email-logs', emailLogRoutes);
 app.use('/api/site-survey', siteSurveyRoutes);
+app.use('/api/help', helpArticleRoutes);
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
-
-// Diagnostic for FormResponse model
-// import FormResponse from './models/FormResponse.js';
-// console.log("FormResponse Schema Keys:", Object.keys(FormResponse.schema.paths));
-// if (FormResponse.schema.paths.moduleContextType.enumValues) {
-//     console.log("WARNING: moduleContextType still has enums:", FormResponse.schema.paths.moduleContextType.enumValues);
-// } else {
-//     console.log("SUCCESS: moduleContextType enum has been removed.");
-// }
 
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const server = http.createServer(app);
+initSocket(server);
 
-// for external access
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT} (Express + Socket.IO)`);
 });
 
 

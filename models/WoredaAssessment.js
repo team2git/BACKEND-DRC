@@ -62,7 +62,9 @@ const disasterRecordSchema = new mongoose.Schema({
 const woredaAssessmentSchema = new mongoose.Schema({
     location: {
         subcity: { type: String, trim: true },
-        woreda: { type: String, required: true, trim: true }
+        woreda: { type: String, required: true, trim: true },
+        block: { type: String, trim: true },
+        house_no: { type: String, trim: true }
     },
     assessment_date: { type: Date, required: true },
     assessed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -89,6 +91,7 @@ const woredaAssessmentSchema = new mongoose.Schema({
 // Indexes for performance
 woredaAssessmentSchema.index({ 'location.subcity': 1, 'location.woreda': 1 });
 woredaAssessmentSchema.index({ 'location.woreda': 1, status: 1 });
+woredaAssessmentSchema.index({ 'location.woreda': 1, 'location.house_no': 1 });
 
 /**
  * Post-save hook: Trigger woreda-level risk score recalculation when a new woreda

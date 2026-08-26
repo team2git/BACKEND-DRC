@@ -2,7 +2,13 @@ import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 
 export const createUser = async (data) => {
-  // Hash password if provided
+  // If phone is empty string or whitespace, remove it so sparse index doesn't conflict
+  if (!data.phone || (typeof data.phone === 'string' && data.phone.trim() === '')) {
+    delete data.phone;
+  } else if (typeof data.phone === 'string') {
+    data.phone = data.phone.trim();
+  }
+
   // Hash password if provided
   if (data.password) {
     const salt = await bcrypt.genSalt(10);

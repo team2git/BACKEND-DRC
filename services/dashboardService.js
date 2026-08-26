@@ -58,18 +58,119 @@ export const getDashboardStats = async (user, queryFilters = {}) => {
         auditLogFilter = { userId: { $in: userIds } };
     }
 
-    if (queryFilters.subcity) {
-        baseFilter['location.subcity'] = new RegExp(queryFilters.subcity, 'i');
+    const andConditions = [];
+
+    // 1. User / Assessor filter
+    if (queryFilters.user && queryFilters.user !== 'all') {
+        const userId = queryFilters.user.trim();
+        const userCondition = {
+            $or: [
+                { createdBy: userId },
+                { assessed_by: userId },
+                { 'identity_location.enumerator_name': new RegExp(userId, 'i') }
+            ]
+        };
+        andConditions.push(userCondition);
+        formResponseFilter.submittedBy = userId;
+        profileMappingFilter.createdBy = userId;
+        templateFilter.createdBy = userId;
+        auditLogFilter.userId = userId;
     }
-    if (queryFilters.woreda) {
-        baseFilter['location.woreda'] = new RegExp(queryFilters.woreda, 'i');
+
+    // 2. Subcity filter
+    if (queryFilters.subcity && queryFilters.subcity !== 'all') {
+        const subcityRegex = new RegExp(queryFilters.subcity.trim(), 'i');
+        andConditions.push({
+            $or: [
+                { 'location.subcity': subcityRegex },
+                { 'identity_location.subcity': subcityRegex }
+            ]
+        });
+    }
+
+    // 3. Woreda filter
+    if (queryFilters.woreda && queryFilters.woreda !== 'all') {
+        const woredaRegex = new RegExp(queryFilters.woreda.trim(), 'i');
+        andConditions.push({
+            $or: [
+                { 'location.woreda': woredaRegex },
+                { 'identity_location.woreda': woredaRegex }
+            ]
+        });
+    }
+
+    // 4. Status filter
+    if (queryFilters.status && queryFilters.status !== 'all') {
+        andConditions.push({ status: queryFilters.status.trim() });
+    }
+
+    // 5. Year filter
+    if (queryFilters.year && queryFilters.year !== 'all' && queryFilters.year !== 'All Years') {
+        const yearMatch = queryFilters.year.match(/\d{4}/);
+        if (yearMatch) {
+            const yr = parseInt(yearMatch[0], 10);
+            const startYearDate = new Date(`${yr}-01-01T00:00:00.000Z`);
+            const endYearDate = new Date(`${yr + 1}-12-31T23:59:59.999Z`);
+            andConditions.push({
+                $or: [
+                    { assessment_date: { $gte: startYearDate, $lte: endYearDate } },
+                    { createdAt: { $gte: startYearDate, $lte: endYearDate } },
+                    { 'disaster_history.year': yr }
+                ]
+            });
+        }
+    }
+
+    // 6. Hazard filter
+    if (queryFilters.hazard && queryFilters.hazard !== 'all') {
+        const hazardRegex = new RegExp(queryFilters.hazard.trim(), 'i');
+        andConditions.push({
+            $or: [
+                { 'hazards.hazard_name': hazardRegex },
+                { 'disaster_history.hazard_name': hazardRegex },
+                { 'housing_physical_conditions.proximity_to_hazard_zone': hazardRegex },
+                { 'recovery_capacity.past_disaster_experience_type': hazardRegex }
+            ]
+        });
+    }
+
+    if (andConditions.length > 0) {
+        if (baseFilter.$or) {
+            baseFilter = { $and: [baseFilter, ...andConditions] };
+        } else {
+            baseFilter = { $and: andConditions };
+        }
+    }
+
+    // Filter incident reports based on active query filters
+    let incidentFilter = {};
+    if (queryFilters.subcity && queryFilters.subcity !== 'all') {
+        incidentFilter['location.subcity'] = new RegExp(queryFilters.subcity.trim(), 'i');
+    }
+    if (queryFilters.woreda && queryFilters.woreda !== 'all') {
+        incidentFilter['location.woreda'] = new RegExp(queryFilters.woreda.trim(), 'i');
+    }
+    if (queryFilters.hazard && queryFilters.hazard !== 'all') {
+        const hRegex = new RegExp(queryFilters.hazard.trim(), 'i');
+        incidentFilter.$or = [
+            { category: hRegex },
+            { reportType: hRegex },
+            { title: hRegex },
+            { description: hRegex }
+        ];
+    }
+    if (queryFilters.status && queryFilters.status !== 'all') {
+        const st = queryFilters.status.toLowerCase();
+        if (st === 'draft') incidentFilter.status = 'submitted';
+        else if (st === 'submitted') incidentFilter.status = 'received';
+        else if (st === 'reviewed') incidentFilter.status = 'resolved';
     }
 
     // Direct data loading ONLY from HouseholdProfile and WoredaAssessment collections
     const [householdProfiles, woredaAssessments, incidentReports] = await Promise.all([
         HouseholdProfile.find(baseFilter).lean(),
         WoredaAssessment.find(baseFilter).lean(),
-        IncidentReport.find().sort({ createdAt: -1 }).limit(20).lean()
+        IncidentReport.find(incidentFilter).sort({ createdAt: -1 }).limit(30).lean()
     ]);
 
     const totalHP = householdProfiles.length;
@@ -249,7 +350,13 @@ export const getDashboardStats = async (user, queryFilters = {}) => {
         };
     }).sort((a, b) => b.score - a.score);
 
-    const highRiskWoredasCount = woredaRankings.filter(k => k.level === 'High' || k.level === 'Very High').length;
+    const allWoredaRankings = woredaRankings;
+    let filteredWoredaRankings = woredaRankings;
+    if (queryFilters.riskLevel && queryFilters.riskLevel !== 'all') {
+        filteredWoredaRankings = woredaRankings.filter(k => k.level.toLowerCase() === queryFilters.riskLevel.trim().toLowerCase());
+    }
+
+    const highRiskWoredasCount = allWoredaRankings.filter(k => k.level === 'High' || k.level === 'Very High').length;
 
     // Aggregate Hazards strictly from WoredaAssessment CGD hazard array
     const hazardCountsMap = new Map();
@@ -468,7 +575,8 @@ export const getDashboardStats = async (user, queryFilters = {}) => {
         woredaName: woredaAssessments[0]?.location?.woreda || householdProfiles[0]?.location?.woreda || stats.userInfo.organizationName || 'PDRM Woreda Bureau',
         zone: householdProfiles[0]?.location?.zone || 'Zone 01',
         region: householdProfiles[0]?.location?.region || 'Addis Ababa',
-        totalWoredas: woredaRankings.length,
+        totalWoredas: allWoredaRankings.length,
+        filteredWoredas: filteredWoredaRankings.length,
         totalPopulation,
         totalHouseholds,
         reportingPeriod: queryFilters.year || '2025/26',
@@ -492,7 +600,8 @@ export const getDashboardStats = async (user, queryFilters = {}) => {
     };
 
     stats.hazardAnalysis = hazardsList;
-    stats.woredaRankings = woredaRankings;
+    stats.woredaRankings = filteredWoredaRankings;
+    stats.allWoredaRankings = allWoredaRankings;
     stats.vulnerabilityAnalysis = {
         totalPopulation,
         totalVulnerablePeople,
@@ -532,6 +641,40 @@ export const getDashboardStats = async (user, queryFilters = {}) => {
         .sort({ timestamp: -1 })
         .limit(10)
         .lean();
+
+    // Dynamically query available filter options from database
+    const systemUsers = await User.find({})
+        .select('_id fullname username email role accessLevel')
+        .sort({ fullname: 1 })
+        .lean();
+
+    const distinctWoredas = Array.from(new Set(allWoredaRankings.map(w => w.name))).filter(Boolean).sort();
+    const distinctSubcities = Array.from(new Set(allWoredaRankings.map(w => w.subcity))).filter(Boolean);
+
+    const standardSubcities = [
+        'Addis Ketema', 'Akaky Kaliti', 'Arada', 'Bole', 'Gullele',
+        'Kirkos', 'Kolfe Keranio', 'Lideta', 'Nifas Silk-Lafto', 'Yeka', 'Lemi Kura'
+    ];
+    const subcitiesSet = new Set([...standardSubcities, ...distinctSubcities]);
+
+    stats.filterOptions = {
+        users: systemUsers.map(u => ({
+            id: u._id.toString(),
+            name: u.fullname || u.username || u.email,
+            email: u.email,
+            role: u.accessLevel || 'user'
+        })),
+        subcities: Array.from(subcitiesSet).sort(),
+        woredas: distinctWoredas.length > 0 ? distinctWoredas : [
+            'Woreda 01', 'Woreda 02', 'Woreda 03', 'Woreda 04', 'Woreda 05',
+            'Woreda 06', 'Woreda 07', 'Woreda 08', 'Woreda 09', 'Woreda 10',
+            'Woreda 11', 'Woreda 12', 'Woreda 13', 'Woreda 14'
+        ],
+        hazards: ['Flood', 'Fire', 'Landslide', 'Epidemic', 'Drought', 'Earthquake', 'Storm / Wind', 'Building Collapse'],
+        riskLevels: ['Very High', 'High', 'Medium', 'Low'],
+        years: ['2025/26', '2024/25', '2023/24', '2022/23'],
+        statuses: ['Draft', 'Submitted', 'Reviewed']
+    };
 
     return stats;
 };

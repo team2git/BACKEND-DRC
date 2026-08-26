@@ -85,12 +85,16 @@ const IncidentReportSchema = new mongoose.Schema(
       email: { type: String, trim: true, lowercase: true, default: '' },
     },
     anonymous: { type: Boolean, default: false },
+    isRead: { type: Boolean, default: false },
+    readAt: { type: Date, default: null },
+    readBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     createdByUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     lastUpdatedByUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
 
+IncidentReportSchema.index({ isRead: 1 });
 IncidentReportSchema.index({ reportCode: 1 });
 IncidentReportSchema.index({ reportType: 1 });
 IncidentReportSchema.index({ status: 1 });

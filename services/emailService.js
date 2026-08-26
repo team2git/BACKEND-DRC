@@ -83,10 +83,19 @@ export const sendVerificationEmail = async (email, code) => {
   await sendEmail({ to: email, subject, text, html, type: 'Verification' });
 };
 
-export const sendWelcomeEmail = async (email, fullname) => {
-  const subject = 'Welcome to IDRMIS';
-  const text = `Hello ${fullname}, welcome to IDRMIS! Your account is now active.`;
-  const html = WELCOME_EMAIL_TEMPLATE.replace('{name}', fullname);
+export const sendWelcomeEmail = async (email, fullname, password) => {
+  const defaultPass = password || process.env.DEFAULT_PASSWORD || '123456';
+  const clientUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+  const loginURL = `${clientUrl}/login`;
+
+  const subject = 'Welcome to IDRMIS - Your Account Credentials';
+  const text = `Hello ${fullname}, welcome to IDRMIS! Your account is now active.\n\nYour Login Credentials:\nEmail: ${email}\nDefault Password: ${defaultPass}\n\nPlease login at: ${loginURL}`;
+  const html = WELCOME_EMAIL_TEMPLATE
+    .replace('{name}', fullname || 'User')
+    .replace('{email}', email)
+    .replace('{password}', defaultPass)
+    .replace('{loginURL}', loginURL);
+
   await sendEmail({ to: email, subject, text, html, type: 'Welcome' });
 };
 

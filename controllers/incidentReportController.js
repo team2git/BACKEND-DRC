@@ -1,5 +1,6 @@
 import IncidentReport from '../models/IncidentReport.js';
 import * as auditService from '../services/auditService.js';
+import { emitDashboardEvent } from '../services/socketService.js';
 
 const sanitizeIncomingPayload = (payload) => {
   const clean = payload && typeof payload === 'object' ? { ...payload } : {};
@@ -74,6 +75,31 @@ export const createIncidentReportPublic = async (req, res) => {
         ip: req.ip
     });
 
+    // Real-time Live Dashboard & Header Notification Socket Event Emission
+    emitDashboardEvent('incident:created', doc);
+    emitDashboardEvent('notification:new', {
+      _id: doc._id,
+      reportCode: doc.reportCode,
+      reportType: doc.reportType,
+      category: doc.category || doc.concernCategory || 'Public Report',
+      severity: doc.severity || 'moderate',
+      details: doc.details || doc.concernDetails || '',
+      location: doc.location || {},
+      status: doc.status,
+      isRead: false,
+      createdAt: doc.createdAt,
+    });
+    if (doc.severity === 'critical') {
+      emitDashboardEvent('alert:critical', {
+        title: 'CRITICAL INCIDENT REPORTED',
+        category: doc.category || 'Emergency',
+        location: doc.location?.addressLine || doc.location?.city || 'Location unspecified',
+        severity: 'critical',
+        reportCode: doc.reportCode,
+        createdAt: doc.createdAt
+      });
+    }
+
     res.status(201).json(doc);
   } catch (error) {
     console.error('createIncidentReportPublic error:', error);
@@ -122,12 +148,99 @@ export const listIncidentReports = async (req, res) => {
   }
 };
 
+// Admin: get unread public incident & concern reports for header notification
+// GET /api/incident-reports/unread
+export const getUnreadPublicReports = async (req, res) => {
+  try {
+    const scopeQuery = req.dataScope || {};
+    
+    // Count total unread reports (either isRead: false OR status: 'submitted')
+    const unreadCount = await IncidentReport.countDocuments({
+      ...scopeQuery,
+      $or: [{ isRead: false }, { isRead: { $exists: false } }, { status: 'submitted' }],
+    });
+
+    // Fetch latest 20 reports for the dropdown
+    const reports = await IncidentReport.find(scopeQuery)
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+
+    res.json({
+      unreadCount,
+      reports,
+    });
+  } catch (error) {
+    console.error('getUnreadPublicReports error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Admin: mark single report as read
+// PATCH /api/incident-reports/:id/read
+export const markReportAsRead = async (req, res) => {
+  try {
+    const doc = await IncidentReport.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          isRead: true,
+          readAt: new Date(),
+          readBy: req.user?._id || null,
+        },
+      },
+      { new: true }
+    );
+
+    if (!doc) return res.status(404).json({ message: 'Report not found' });
+    res.json(doc);
+  } catch (error) {
+    console.error('markReportAsRead error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Admin: mark all reports as read
+// PATCH /api/incident-reports/mark-all-read
+export const markAllReportsAsRead = async (req, res) => {
+  try {
+    const scopeQuery = req.dataScope || {};
+    await IncidentReport.updateMany(
+      {
+        ...scopeQuery,
+        $or: [{ isRead: false }, { isRead: { $exists: false } }],
+      },
+      {
+        $set: {
+          isRead: true,
+          readAt: new Date(),
+          readBy: req.user?._id || null,
+        },
+      }
+    );
+
+    res.json({ message: 'All reports marked as read' });
+  } catch (error) {
+    console.error('markAllReportsAsRead error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Admin: get single report
 // GET /api/incident-reports/:id
 export const getIncidentReportById = async (req, res) => {
   try {
     const doc = await IncidentReport.findById(req.params.id).lean();
     if (!doc) return res.status(404).json({ message: 'Report not found' });
+    
+    // Auto mark as read when viewed
+    if (!doc.isRead) {
+      await IncidentReport.findByIdAndUpdate(req.params.id, {
+        $set: { isRead: true, readAt: new Date(), readBy: req.user?._id || null },
+      });
+      doc.isRead = true;
+    }
+
     res.json(doc);
   } catch (error) {
     console.error('getIncidentReportById error:', error);
@@ -159,6 +272,9 @@ export const updateIncidentReport = async (req, res) => {
         after: doc,
         ip: req.ip
     });
+
+    // Real-time Live Dashboard Socket Event Emission
+    emitDashboardEvent('incident:updated', doc);
 
     res.json(doc);
   } catch (error) {

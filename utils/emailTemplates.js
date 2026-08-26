@@ -84,11 +84,19 @@ export const PASSWORD_RESET_SUCCESS_TEMPLATE = BASE_TEMPLATE(
 export const WELCOME_EMAIL_TEMPLATE = BASE_TEMPLATE(
     'Welcome Onboard',
     `
-    <p>Hello {name},</p>
-    <p>Welcome to <strong>IDRMIS</strong>. Your account has been provisioned and is now active within the disaster management network.</p>
-    <p>We are excited to have you as part of our mission-critical operations team.</p>
+    <p>Hello <strong>{name}</strong>,</p>
+    <p>Welcome to <strong>IDRMIS</strong>! Your account has been verified and is now active within the disaster risk management network.</p>
+    
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; margin: 28px 0;">
+      <h3 style="margin-top: 0; color: #1e293b; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Your Login Credentials</h3>
+      <p style="margin: 8px 0; font-size: 15px; color: #334155;"><strong>Email:</strong> <span style="font-family: monospace; color: #4f46e5;">{email}</span></p>
+      <p style="margin: 8px 0; font-size: 15px; color: #334155;"><strong>Default Password:</strong> <span style="font-family: monospace; background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 8px; font-weight: 700;">{password}</span></p>
+    </div>
+
+    <p style="font-size: 14px; color: #64748b;">For your security, we strongly advise you to sign in and update your password from your account profile settings.</p>
+    
     <div class="cta-container">
-      <a href="https://idrmis.gov.et/login" class="btn">Enter Command Center</a>
+      <a href="{loginURL}" class="btn">Enter Command Center</a>
     </div>
     `,
     'Account Activation Protocol'
