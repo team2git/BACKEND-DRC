@@ -7,8 +7,8 @@ import * as dashboardService from '../services/dashboardService.js';
  */
 export const getStats = async (req, res) => {
     try {
-        // req.user is populated by the protect middleware
-        const stats = await dashboardService.getDashboardStats(req.user);
+        // req.user is populated by the protect middleware, pass req.query filters
+        const stats = await dashboardService.getDashboardStats(req.user, req.query);
         res.json(stats);
     } catch (error) {
         console.error('Dashboard stats error:', error);

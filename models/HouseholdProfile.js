@@ -3,7 +3,6 @@ import mongoose from 'mongoose';
 const householdIdentitySchema = new mongoose.Schema({
     subcity: { type: String, trim: true },
     woreda: { type: String, trim: true },
-    kebele: { type: String, trim: true },
     block: { type: String, trim: true },
     house_no: { type: String, trim: true },
     gps_latitude: { type: Number },
@@ -74,7 +73,6 @@ const householdProfileSchema = new mongoose.Schema({
     location: {
         subcity: { type: String, trim: true },
         woreda: { type: String, required: true, trim: true },
-        kebele: { type: String, trim: true },
         block: { type: String, trim: true },
         house_no: { type: String, trim: true }
     },
@@ -101,6 +99,7 @@ const householdProfileSchema = new mongoose.Schema({
 // Indexes for performance on spatial queries
 householdProfileSchema.index({ 'location.subcity': 1, 'location.woreda': 1, 'location.block': 1 });
 householdProfileSchema.index({ 'location.woreda': 1, status: 1 });
+householdProfileSchema.index({ 'location.woreda': 1, 'location.house_no': 1 });
 
 /**
  * Post-save hook: Trigger scoped spatial aggregation after a household profile is saved.

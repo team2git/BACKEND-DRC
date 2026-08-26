@@ -856,7 +856,6 @@ export const syncFromInterview = async (req, res) => {
                 transformedData.location = {
                     subcity: response.respondentMetadata?.location?.subcity || '',
                     woreda: response.respondentMetadata?.location?.woreda || 'Unknown Woreda',
-                    kebele: response.respondentMetadata?.location?.kebele || '',
                     block: response.respondentMetadata?.location?.block || '',
                     house_no: response.respondentMetadata?.location?.house_no || ''
                 };
@@ -866,7 +865,9 @@ export const syncFromInterview = async (req, res) => {
             if (!transformedData.location) {
                 transformedData.location = {
                     subcity: response.respondentMetadata?.location?.subcity || '',
-                    woreda: response.respondentMetadata?.location?.woreda || 'Unknown Woreda'
+                    woreda: response.respondentMetadata?.location?.woreda || 'Unknown Woreda',
+                    block: response.respondentMetadata?.location?.block || '',
+                    house_no: response.respondentMetadata?.location?.house_no || ''
                 };
             }
             saved = await WoredaAssessment.create(transformedData);
@@ -909,15 +910,14 @@ export const bulkImportData = async (req, res) => {
             if (type === 'household') {
                 const subcity = item.Subcity || item.subcity || '';
                 const woreda = item.Woreda || item.woreda || 'Unknown Woreda';
-                const kebele = item.Kebele || item.kebele || '';
                 const block = item.Block || item.block || 'Block 01';
                 const house_no = item['House No'] || item.house_no || `H-${Math.floor(100 + Math.random() * 900)}`;
 
                 const doc = await HouseholdProfile.create({
-                    location: { subcity, woreda, kebele, block, house_no },
+                    location: { subcity, woreda, block, house_no },
                     assessment_date: item['Survey Date (YYYY-MM-DD)'] || item.survey_date || new Date(),
                     identity_location: {
-                        subcity, woreda, kebele, block, house_no,
+                        subcity, woreda, block, house_no,
                         enumerator_name: item['Enumerator Name'] || item.enumerator_name || '',
                         survey_date: item['Survey Date (YYYY-MM-DD)'] || item.survey_date || new Date(),
                         respondent_consent_status: item['Consent (Yes/No)'] || item.consent || 'Yes'

@@ -22,6 +22,6 @@ const surveySyncLogSchema = new mongoose.Schema({
         timestamp: { type: Date, default: Date.now }
     }],
     syncedAt: Date
-}, { timestamps: true });
+}, { timestamps: true, suppressReservedKeysWarning: true });
 
 export default mongoose.model('SurveySyncLog', surveySyncLogSchema);

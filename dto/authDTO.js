@@ -5,7 +5,8 @@ export const validateRegister = (data) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!data.email || !emailRegex.test(data.email)) errors.push('Valid email is required.');
 
-    if (!data.password || data.password.length < 6) errors.push('Password must be at least 6 characters.');
+    // Password is generated from backend DEFAULT_PASSWORD if not provided
+    if (data.password && data.password.length < 6) errors.push('Password must be at least 6 characters.');
 
     return { isValid: errors.length === 0, errors };
 };
@@ -18,11 +19,19 @@ export const validateLogin = (data) => {
 };
 
 export const transformRegisterInput = (data) => {
-    return {
+    const transformed = {
         ...data,
         fullname: data.fullname?.trim(),
         email: data.email?.trim().toLowerCase()
     };
+
+    if (!transformed.phone || transformed.phone.trim() === '') {
+        delete transformed.phone;
+    } else {
+        transformed.phone = transformed.phone.trim();
+    }
+
+    return transformed;
 };
 
 export const transformLoginInput = (data) => {

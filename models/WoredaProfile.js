@@ -5,7 +5,6 @@ import { normalizeHouseholdToAggregatedSchema } from '../services/SpatialAggrega
 const adminLocationSchema = new mongoose.Schema({
     subcity: { type: String, trim: true },
     woreda: { type: String, required: true, trim: true },
-    kebele: { type: String, trim: true },
     block: { type: String, trim: true },
     house_no: { type: String, trim: true }
 });
@@ -310,7 +309,7 @@ const woredaProfileSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 woredaProfileSchema.index(
-    { 'location.subcity': 1, 'location.woreda': 1, 'location.kebele': 1, 'location.block': 1, 'location.house_no': 1 },
+    { 'location.subcity': 1, 'location.woreda': 1, 'location.block': 1, 'location.house_no': 1 },
     { unique: true, name: 'unique_location_index' }
 );
 

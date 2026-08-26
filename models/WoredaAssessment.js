@@ -46,10 +46,25 @@ const cgdCommunityVoiceSchema = new mongoose.Schema({
     suggested_interventions: { type: String, trim: true }
 }, { _id: false });
 
+const disasterRecordSchema = new mongoose.Schema({
+    year: { type: Number, required: true },
+    hazard_name: { type: String, required: true, trim: true },
+    location_description: { type: String, trim: true },
+    affected_population: { type: Number, default: 0 },
+    displaced_population: { type: Number, default: 0 },
+    deaths: { type: Number, default: 0 },
+    injuries: { type: Number, default: 0 },
+    houses_damaged: { type: Number, default: 0 },
+    infrastructure_damaged: { type: String, trim: true },
+    estimated_loss_etb: { type: Number, default: 0 }
+}, { _id: false });
+
 const woredaAssessmentSchema = new mongoose.Schema({
     location: {
         subcity: { type: String, trim: true },
-        woreda: { type: String, required: true, trim: true }
+        woreda: { type: String, required: true, trim: true },
+        block: { type: String, trim: true },
+        house_no: { type: String, trim: true }
     },
     assessment_date: { type: Date, required: true },
     assessed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -58,6 +73,7 @@ const woredaAssessmentSchema = new mongoose.Schema({
     // CGD Data
     hazards: [communityHazardSchema],
     cgd_community_voice: { type: cgdCommunityVoiceSchema },
+    disaster_history: [disasterRecordSchema],
 
     // KII Data
     kii_capacity_indicators: { type: kiiCapacityIndicatorsSchema },
@@ -75,6 +91,7 @@ const woredaAssessmentSchema = new mongoose.Schema({
 // Indexes for performance
 woredaAssessmentSchema.index({ 'location.subcity': 1, 'location.woreda': 1 });
 woredaAssessmentSchema.index({ 'location.woreda': 1, status: 1 });
+woredaAssessmentSchema.index({ 'location.woreda': 1, 'location.house_no': 1 });
 
 /**
  * Post-save hook: Trigger woreda-level risk score recalculation when a new woreda

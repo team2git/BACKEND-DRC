@@ -1,5 +1,6 @@
 import express from 'express';
 // Trigger nodemon restart
+import http from 'http';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -18,6 +19,7 @@ import hierarchyRoutes from './routes/hierarchyRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import liveDashboardRoutes from './routes/liveDashboardRoutes.js';
 import templateRoutes from './routes/templateRoutes.js';
 import formResponseRoutes from './routes/formResponseRoutes.js';
 import woredaProfileRoutes from './routes/woredaProfileRoutes.js';
@@ -31,16 +33,21 @@ import alertSubscriptionRoutes from './routes/alertSubscriptionRoutes.js';
 import emergencyContactRoutes from './routes/emergencyContactRoutes.js';
 import inspectionRequestRoutes from './routes/inspectionRequestRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
+import newsRoutes from './routes/newsRoutes.js';
 import adminLogRoutes from './routes/adminLogRoutes.js';
 import emailLogRoutes from './routes/emailLogRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
 import siteSurveyRoutes from './routes/siteSurveyRoutes.js';
+import helpArticleRoutes from './routes/helpArticleRoutes.js';
 import { seedDefaultLocations } from './controllers/locationController.js';
+import { seedDefaultHelpArticles } from './controllers/helpArticleController.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
+import { initSocket } from './services/socketService.js';
 
 dotenv.config();
 connectDB().then(() => {
     seedDefaultLocations();
+    seedDefaultHelpArticles();
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -74,8 +81,13 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static files from uploads directory (both /uploads and /api/uploads for Nginx/reverse proxy compatibility)
+const uploadsDirectory = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDirectory)) {
+  fs.mkdirSync(uploadsDirectory, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDirectory));
+app.use('/api/uploads', express.static(uploadsDirectory));
 
 // Lightweight public endpoint (self-contained) returning latest WoredaProfile.updatedAt
 app.get('/api/public/gis-last-updated', async (req, res) => {
@@ -147,6 +159,7 @@ app.use('/api/hierarchy', hierarchyRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/live-dashboard', liveDashboardRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/responses', formResponseRoutes);
 // Public quick endpoint for UI to show last GIS update time (register before router mount)
@@ -164,9 +177,12 @@ app.use('/api/emergency-contacts', emergencyContactRoutes);
 app.use('/api/inspection-requests', inspectionRequestRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/news', newsRoutes);
+app.use('/api/admin/news', newsRoutes);
 app.use('/api/admin-logs', adminLogRoutes);
 app.use('/api/email-logs', emailLogRoutes);
 app.use('/api/site-survey', siteSurveyRoutes);
+app.use('/api/help', helpArticleRoutes);
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // Debug: list registered routes (temporary)
@@ -205,11 +221,11 @@ app.get('/api/debug/routes', (req, res) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const server = http.createServer(app);
+initSocket(server);
 
-// for external access
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT} (Express + Socket.IO)`);
 });
 
 

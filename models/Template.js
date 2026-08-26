@@ -48,7 +48,6 @@ const fieldSchema = new mongoose.Schema({
     defaultValue: mongoose.Schema.Types.Mixed,
     systemAutoFill: {
         type: String,
-        enum: ['none', 'user_name', 'user_phone', 'user_email', 'user_organization', 'user_subcity', 'user_kebele'],
         default: 'none'
     },
     permissions: {

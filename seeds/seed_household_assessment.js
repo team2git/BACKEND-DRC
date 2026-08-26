@@ -42,14 +42,6 @@ const buildTemplateAndMapping = () => {
             },
             {
               fieldId: oid(),
-              questionCode: 'kebele',
-              label: 'Kebele',
-              type: 'text',
-              required: true,
-              helpText: 'Kebele number'
-            },
-            {
-              fieldId: oid(),
               questionCode: 'block',
               label: 'Block',
               type: 'text',
@@ -662,7 +654,6 @@ const buildTemplateAndMapping = () => {
     // Identity & Location
     { q: 'subcity',                           t: 'location.subcity',                                             cast: 'direct' },
     { q: 'woreda',                            t: 'location.woreda',                                              cast: 'direct' },
-    { q: 'kebele',                            t: 'location.kebele',                                              cast: 'direct' },
     { q: 'block',                             t: 'location.block',                                               cast: 'direct' },
     { q: 'house_no',                          t: 'location.house_no',                                            cast: 'direct' },
     { q: 'gps_latitude',                      t: 'location.gps_latitude',                                        cast: 'cast_number' },
