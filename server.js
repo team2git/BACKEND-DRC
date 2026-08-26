@@ -1,4 +1,5 @@
 import express from 'express';
+// Trigger nodemon restart
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -20,6 +21,7 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 import templateRoutes from './routes/templateRoutes.js';
 import formResponseRoutes from './routes/formResponseRoutes.js';
 import woredaProfileRoutes from './routes/woredaProfileRoutes.js';
+import { getWoredaProfilesLastUpdated } from './controllers/woredaProfileController.js';
 import householdProfileRoutes from './routes/householdProfileRoutes.js';
 import woredaAssessmentRoutes from './routes/woredaAssessmentRoutes.js';
 import profileMappingRoutes from './routes/profileMappingRoutes.js';
@@ -75,6 +77,64 @@ app.use((req, res, next) => {
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Lightweight public endpoint (self-contained) returning latest WoredaProfile.updatedAt
+app.get('/api/public/gis-last-updated', async (req, res) => {
+    try {
+        const { default: WoredaProfile } = await import('./models/WoredaProfile.js');
+        const latest = await WoredaProfile.findOne().sort({ updatedAt: -1 }).select('updatedAt').lean();
+        if (!latest || !latest.updatedAt) return res.json({ lastUpdated: null });
+        return res.json({ lastUpdated: latest.updatedAt });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+});
+
+// Public: return recent active incident reports with coordinates for map overlay
+app.get('/api/public/active-incidents', async (req, res) => {
+    try {
+        const { default: IncidentReport } = await import('./models/IncidentReport.js');
+        const query = {
+            $and: [
+                { latitude: { $ne: null } },
+                { longitude: { $ne: null } }
+            ]
+        };
+        // Only return active reports if status exists, otherwise return recent with coords
+        const docs = await IncidentReport.find(query).sort({ updatedAt: -1 }).limit(200).select('latitude longitude category severity details updatedAt reportCode location').lean();
+        res.json(docs);
+    } catch (error) {
+        console.error('active-incidents error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Public: return woreda profile hazard & vulnerability summaries
+app.get('/api/public/woreda-hazards', async (req, res) => {
+    try {
+        const { default: WoredaProfile } = await import('./models/WoredaProfile.js');
+        // Return profiles at woreda aggregation level if available, otherwise top-level profiles
+        const query = { $or: [ { 'hierarchy_summary.aggregation_level': 'woreda' }, { aggregation_level: 'woreda' }, { aggregation_level: { $exists: false } } ] };
+        const docs = await WoredaProfile.find(query)
+            .sort({ 'risk_index.hazard_index': -1, updatedAt: -1 })
+            .limit(500)
+            .select('location hierarchy_summary risk_index hazards updatedAt')
+            .lean();
+
+        const mapped = docs.map(d => ({
+            location: d.location || d.hierarchy_summary || {},
+            hazardIndex: d.risk_index?.hazard_index ?? null,
+            vulnerabilityIndex: d.risk_index?.vulnerability_index ?? null,
+            hazards: Array.isArray(d.hazards) ? d.hazards.map(h => h.hazard_name || h) : [],
+            updatedAt: d.updatedAt
+        }));
+
+        res.json(mapped);
+    } catch (error) {
+        console.error('woreda-hazards error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/organizations', organizationRoutes);
@@ -89,6 +149,10 @@ app.use('/api/audit-logs', auditRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/responses', formResponseRoutes);
+// Public quick endpoint for UI to show last GIS update time (register before router mount)
+// also expose a clearly public path to avoid router auth interference
+app.get('/api/public/woreda-profiles/last-updated', getWoredaProfilesLastUpdated);
+app.get('/api/woreda-profiles/last-updated', getWoredaProfilesLastUpdated);
 app.use('/api/woreda-profiles', woredaProfileRoutes);
 app.use('/api/household-profiles', householdProfileRoutes);
 app.use('/api/woreda-assessments', woredaAssessmentRoutes);
@@ -104,6 +168,30 @@ app.use('/api/admin-logs', adminLogRoutes);
 app.use('/api/email-logs', emailLogRoutes);
 app.use('/api/site-survey', siteSurveyRoutes);
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
+// Debug: list registered routes (temporary)
+app.get('/api/debug/routes', (req, res) => {
+    try {
+        const routes = [];
+        app._router.stack.forEach((middleware) => {
+            if (middleware.route) {
+                // routes registered directly on the app
+                const methods = Object.keys(middleware.route.methods).join(',').toUpperCase();
+                routes.push({ path: middleware.route.path, methods });
+            } else if (middleware.name === 'router' && middleware.handle && middleware.handle.stack) {
+                middleware.handle.stack.forEach((handler) => {
+                    if (handler.route) {
+                        const methods = Object.keys(handler.route.methods).join(',').toUpperCase();
+                        routes.push({ path: handler.route.path, methods });
+                    }
+                });
+            }
+        });
+        res.json(routes.sort((a,b)=>a.path.localeCompare(b.path)));
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 
 // Diagnostic for FormResponse model
 // import FormResponse from './models/FormResponse.js';

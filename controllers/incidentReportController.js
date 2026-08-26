@@ -14,6 +14,17 @@ const generateReportCode = () => {
   return String(Math.floor(1000 + Math.random() * 9000));
 };
 
+const normalizeStatus = (incoming) => {
+  if (!incoming) return undefined;
+  const s = String(incoming).toLowerCase().trim();
+  if (s === 'solved' || s.includes('solv')) return 'closed';
+  if (s === 'not solved' || s === 'not_solved' || s.includes('not')) return 'submitted';
+  // allow existing backend statuses if provided
+  const allowed = ['submitted', 'received', 'dispatched', 'closed'];
+  if (allowed.includes(s)) return s;
+  return undefined;
+};
+
 // Public: create an incident report
 // POST /api/incident-reports
 export const createIncidentReportPublic = async (req, res) => {
@@ -61,6 +72,7 @@ export const createIncidentReportPublic = async (req, res) => {
 
     const doc = await IncidentReport.create({
       ...payload,
+      ...(payload.status ? { status: normalizeStatus(payload.status) } : {}),
       reportCode,
       ...(req.user?._id ? { createdByUser: req.user._id, lastUpdatedByUser: req.user._id } : {}),
     });
@@ -104,6 +116,9 @@ export const listIncidentReports = async (req, res) => {
         { 'location.addressLine': { $regex: search, $options: 'i' } },
         { 'location.city': { $regex: search, $options: 'i' } },
         { 'location.region': { $regex: search, $options: 'i' } },
+        { 'location.placeName': { $regex: search, $options: 'i' } },
+        { 'location.subCity': { $regex: search, $options: 'i' } },
+        { 'location.woreda': { $regex: search, $options: 'i' } },
       ];
       // Merge search $or with any existing dataScope $or using $and to avoid collision
       if (query.$or) {
@@ -143,7 +158,17 @@ export const updateIncidentReport = async (req, res) => {
     const beforeDoc = await IncidentReport.findById(req.params.id);
     if (!beforeDoc) return res.status(404).json({ message: 'Report not found' });
     const before = beforeDoc.toObject();
+    // Determine if requester is admin/superuser
+    const isAdmin = req.user && (req.user.accessLevel === 'super_admin' || (req.user.roles && req.user.roles.some(r => ['superadmin','super admin','super_admin','admin','administrator','branch_admin','manager'].includes((r.name || '').toString().toLowerCase()))));
 
+    // Prevent non-admins from changing protected fields
+    if (!isAdmin) {
+      delete payload.status;
+      delete payload.resolvedAt;
+      delete payload.resolvedBy;
+      delete payload.resolutionDescription;
+      delete payload.resolutionNotes;
+    }
     const doc = await IncidentReport.findByIdAndUpdate(
       req.params.id,
       { $set: payload },

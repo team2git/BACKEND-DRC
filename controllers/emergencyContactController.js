@@ -1,4 +1,5 @@
 import EmergencyContact from '../models/EmergencyContact.js';
+import PortalContent from '../models/PortalContent.js';
 import * as auditService from '../services/auditService.js';
 
 const DEFAULT_CONTACTS = [
@@ -104,8 +105,12 @@ export const getPublicEmergencyDirectory = async (req, res) => {
   try {
     const region = (req.query.region || '').toString().trim();
     const query = { isActive: true, ...buildRegionMatcher(region) };
-    const contacts = await EmergencyContact.find(query).sort({ sortOrder: 1, title: 1 }).lean();
+    const [contacts, portalContent] = await Promise.all([
+      EmergencyContact.find(query).sort({ sortOrder: 1, title: 1 }).lean(),
+      PortalContent.findOne({ key: 'default' }).lean()
+    ]);
     const resolvedContacts = contacts.length > 0 ? contacts : DEFAULT_CONTACTS;
+    const warningMessage = portalContent?.pages?.emergencyDirectory?.warningMessage || '';
 
     res.json({
       title: 'Emergency Contact Directory',
@@ -118,12 +123,38 @@ export const getPublicEmergencyDirectory = async (req, res) => {
         ? `Local services based on ${region}`
         : 'Local services based on your region',
       crisisText: 'Quick access in crisis.',
+      warningMessage,
       region,
       availableRegions: contacts.length > 0 ? deriveRegions(contacts) : [],
       contacts: resolvedContacts,
     });
   } catch (error) {
     console.error('getPublicEmergencyDirectory error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getGlobalWarning = async (req, res) => {
+  try {
+    const doc = await PortalContent.findOne({ key: 'default' }).lean();
+    res.json({ warningMessage: doc?.pages?.emergencyDirectory?.warningMessage || '' });
+  } catch (error) {
+    console.error('getGlobalWarning error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const updateGlobalWarning = async (req, res) => {
+  try {
+    const { warningMessage } = req.body;
+    await PortalContent.updateOne(
+      { key: 'default' },
+      { $set: { 'pages.emergencyDirectory.warningMessage': (warningMessage || '').toString().trim() } },
+      { upsert: true }
+    );
+    res.json({ warningMessage });
+  } catch (error) {
+    console.error('updateGlobalWarning error:', error);
     res.status(500).json({ message: error.message });
   }
 };

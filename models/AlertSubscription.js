@@ -31,6 +31,8 @@ const AlertLocationSchema = new mongoose.Schema(
     country: { type: String, trim: true, default: '' },
     region: { type: String, trim: true, default: '' },
     city: { type: String, trim: true, default: '' },
+    subCity: { type: String, trim: true, default: '' },
+    woreda: { type: String, trim: true, default: '' },
     addressLine: { type: String, trim: true, default: '' },
     latitude: { type: Number, default: null },
     longitude: { type: Number, default: null },

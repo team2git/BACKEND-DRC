@@ -669,6 +669,18 @@ export const getWoredaProfiles = async (req, res) => {
     }
 };
 
+// @desc    Get latest WoredaProfiles update timestamp (public)
+// @route   GET /api/woreda-profiles/last-updated
+export const getWoredaProfilesLastUpdated = async (req, res) => {
+    try {
+        const latest = await WoredaProfile.findOne().sort({ updatedAt: -1 }).select('updatedAt').lean();
+        if (!latest || !latest.updatedAt) return res.json({ lastUpdated: null });
+        return res.json({ lastUpdated: latest.updatedAt });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Get single Woreda Profile
 export const getWoredaProfileById = async (req, res) => {
     try {

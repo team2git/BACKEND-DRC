@@ -16,7 +16,7 @@ const surveySyncLogSchema = new mongoose.Schema({
         completedAt: { type: Date, default: Date.now },
         details: mongoose.Schema.Types.Mixed
     }],
-    errors: [{
+    syncErrors: [{
         step: String,
         message: String,
         timestamp: { type: Date, default: Date.now }

@@ -193,6 +193,9 @@ const PortalContentSchema = new mongoose.Schema(
         templateSearch: { type: String, trim: true, default: '' },
         heroImage: { type: String, trim: true, default: '' },
       },
+      emergencyDirectory: {
+        warningMessage: { type: String, trim: true, default: '' },
+      },
     },
   },
   { timestamps: true }

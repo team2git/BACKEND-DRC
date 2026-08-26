@@ -81,6 +81,7 @@ const householdProfileSchema = new mongoose.Schema({
     assessment_date: { type: Date, required: true },
     assessed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     remarks: { type: String },
+    notes: { type: String, trim: true, default: '' },
 
     identity_location: { type: householdIdentitySchema },
     demographics: { type: householdDemographicsSchema },

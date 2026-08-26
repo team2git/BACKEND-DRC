@@ -4,6 +4,9 @@ const IncidentLocationSchema = new mongoose.Schema(
   {
     addressLine: { type: String, trim: true, default: '' },
     city: { type: String, trim: true, default: '' },
+    placeName: { type: String, trim: true, default: '' },
+    subCity: { type: String, trim: true, default: '' },
+    woreda: { type: String, trim: true, default: '' },
     region: { type: String, trim: true, default: '' },
     country: { type: String, trim: true, default: '' },
     latitude: { type: Number, default: null },
@@ -17,6 +20,7 @@ const IncidentAttachmentSchema = new mongoose.Schema(
     url: { type: String, trim: true, default: '' },
     type: { type: String, trim: true, default: '' }, // image/video
     name: { type: String, trim: true, default: '' },
+    uploadedBy: { type: String, default: 'user' },
   },
   { _id: false }
 );
@@ -79,6 +83,10 @@ const IncidentReportSchema = new mongoose.Schema(
       nature: { type: String, trim: true, default: '' },
       peopleAffected: { type: String, trim: true, default: '' },
     },
+    resolutionDescription: { type: String, trim: true, default: '' },
+    resolvedBy: { type: String, trim: true, default: '' },
+    resolvedAt: { type: Date, default: null },
+    resolutionNotes: { type: String, trim: true, default: '' },
     attachments: { type: [IncidentAttachmentSchema], default: [] },
     contact: {
       phone: { type: String, trim: true, default: '' },
