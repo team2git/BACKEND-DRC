@@ -36,6 +36,9 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import newsRoutes from './routes/newsRoutes.js';
 import adminLogRoutes from './routes/adminLogRoutes.js';
 import emailLogRoutes from './routes/emailLogRoutes.js';
+import emailConfigRoutes from './routes/emailConfigRoutes.js';
+import smsConfigRoutes from './routes/smsConfigRoutes.js';
+import smsLogRoutes from './routes/smsLogRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
 import siteSurveyRoutes from './routes/siteSurveyRoutes.js';
 import helpArticleRoutes from './routes/helpArticleRoutes.js';
@@ -43,6 +46,8 @@ import reportBuilderRoutes from './routes/reportBuilderRoutes.js';
 import { seedDefaultLocations } from './controllers/locationController.js';
 import { seedDefaultHelpArticles } from './controllers/helpArticleController.js';
 import { seedReportBuilderPermissions } from './controllers/reportBuilderController.js';
+import { getActiveSmsConfig } from './services/smppService.js';
+import { getActiveEmailConfig } from './services/emailService.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { initSocket } from './services/socketService.js';
 
@@ -51,6 +56,8 @@ connectDB().then(() => {
     seedDefaultLocations();
     seedDefaultHelpArticles();
     seedReportBuilderPermissions();
+    getActiveSmsConfig();
+    getActiveEmailConfig();
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -185,6 +192,9 @@ app.use('/api/report-builder', reportBuilderRoutes);
 app.use('/api/admin/news', newsRoutes);
 app.use('/api/admin-logs', adminLogRoutes);
 app.use('/api/email-logs', emailLogRoutes);
+app.use('/api/sms-config', smsConfigRoutes);
+app.use('/api/sms-logs', smsLogRoutes);
+app.use('/api/email-config', emailConfigRoutes);
 app.use('/api/site-survey', siteSurveyRoutes);
 app.use('/api/help', helpArticleRoutes);
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
