@@ -18,11 +18,9 @@ const generateReportCode = () => {
 const normalizeStatus = (incoming) => {
   if (!incoming) return undefined;
   const s = String(incoming).toLowerCase().trim();
-  if (s === 'solved' || s.includes('solv')) return 'closed';
-  if (s === 'not solved' || s === 'not_solved' || s.includes('not')) return 'submitted';
-  // allow existing backend statuses if provided
-  const allowed = ['submitted', 'received', 'dispatched', 'closed'];
+  const allowed = ['new', 'submitted', 'received', 'dispatched', 'not_solved', 'solved', 'closed', 'archived'];
   if (allowed.includes(s)) return s;
+  if (s === 'not solved') return 'not_solved';
   return undefined;
 };
 
@@ -169,10 +167,10 @@ export const getUnreadPublicReports = async (req, res) => {
   try {
     const scopeQuery = req.dataScope || {};
     
-    // Count total unread reports (either isRead: false OR status: 'submitted')
+    // Count total unread reports (either isRead: false OR status: 'new' or 'submitted')
     const unreadCount = await IncidentReport.countDocuments({
       ...scopeQuery,
-      $or: [{ isRead: false }, { isRead: { $exists: false } }, { status: 'submitted' }],
+      $or: [{ isRead: false }, { isRead: { $exists: false } }, { status: 'new' }, { status: 'submitted' }],
     });
 
     // Fetch latest 20 reports for the dropdown
@@ -281,6 +279,17 @@ export const updateIncidentReport = async (req, res) => {
       delete payload.resolvedBy;
       delete payload.resolutionDescription;
       delete payload.resolutionNotes;
+      delete payload.responsibleInstitution;
+      delete payload.assignedTo;
+    } else if (payload.status) {
+      const statuses = ['new', 'submitted', 'received', 'dispatched', 'not_solved', 'solved', 'closed'];
+      if (before.status !== 'archived' && payload.status !== 'archived') {
+        const currentIndex = statuses.indexOf(before.status || 'new');
+        const newIndex = statuses.indexOf(payload.status);
+        if (currentIndex !== -1 && newIndex !== -1 && newIndex < currentIndex) {
+          return res.status(400).json({ message: 'Status cannot be reverted to a previous state.' });
+        }
+      }
     }
     const doc = await IncidentReport.findByIdAndUpdate(
       req.params.id,
@@ -304,6 +313,35 @@ export const updateIncidentReport = async (req, res) => {
     res.json(doc);
   } catch (error) {
     console.error('updateIncidentReport error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Admin: delete report permanently
+// DELETE /api/incident-reports/:id
+export const deleteIncidentReport = async (req, res) => {
+  try {
+    const doc = await IncidentReport.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: 'Report not found' });
+
+    const before = doc.toObject();
+    await IncidentReport.findByIdAndDelete(req.params.id);
+
+    await auditService.logAction({
+      userId: req.user?._id,
+      action: 'INCIDENT_REPORT_DELETE',
+      resource: 'IncidentReport',
+      resourceId: doc._id,
+      before,
+      ip: req.ip,
+    });
+
+    // Real-time Live Dashboard Socket Event Emission
+    emitDashboardEvent('incident:deleted', { _id: req.params.id });
+
+    res.json({ message: 'Incident report permanently deleted' });
+  } catch (error) {
+    console.error('deleteIncidentReport error:', error);
     res.status(500).json({ message: error.message });
   }
 };

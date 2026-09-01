@@ -4,6 +4,7 @@ import {
   listAlertSubscriptions,
   getAlertSubscriptionById,
   updateAlertSubscription,
+  deleteAlertSubscription,
 } from '../controllers/alertSubscriptionController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { checkPermission } from '../middleware/permissionMiddleware.js';
@@ -19,5 +20,6 @@ router.post('/', upsertAlertSubscriptionPublic);
 router.get('/', protect, checkPermission('alertsubscription', 'view'), applyScopeFilter(AlertSubscription), listAlertSubscriptions);
 router.get('/:id', protect, checkPermission('alertsubscription', 'view'), checkDocumentAccess(AlertSubscription), getAlertSubscriptionById);
 router.put('/:id', protect, checkPermission('alertsubscription', 'update'), checkDocumentAccess(AlertSubscription), updateAlertSubscription);
+router.delete('/:id', protect, checkPermission('alertsubscription', 'delete'), checkDocumentAccess(AlertSubscription), deleteAlertSubscription);
 
 export default router;

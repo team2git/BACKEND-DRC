@@ -4,6 +4,7 @@ import {
   listIncidentReports,
   getIncidentReportById,
   updateIncidentReport,
+  deleteIncidentReport,
   getUnreadPublicReports,
   markReportAsRead,
   markAllReportsAsRead,
@@ -27,5 +28,6 @@ router.patch('/:id/read', protect, checkDocumentAccess(IncidentReport), markRepo
 router.get('/', protect, checkPermission('incidentreport', 'view'), applyScopeFilter(IncidentReport), listIncidentReports);
 router.get('/:id', protect, checkPermission('incidentreport', 'view'), checkDocumentAccess(IncidentReport), getIncidentReportById);
 router.put('/:id', protect, checkPermission('incidentreport', 'update'), checkDocumentAccess(IncidentReport), updateIncidentReport);
+router.delete('/:id', protect, checkPermission('incidentreport', 'delete'), checkDocumentAccess(IncidentReport), deleteIncidentReport);
 
 export default router;

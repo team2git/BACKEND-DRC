@@ -48,7 +48,17 @@ const incidentStorage = multer.diskStorage({
   },
 });
 
-const incidentUpload = multer({ storage: incidentStorage });
+const incidentUpload = multer({
+  storage: incidentStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+      cb(null, true);
+      return;
+    }
+    cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'file'));
+  },
+});
 
 const inspectionStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, inspectionDir),

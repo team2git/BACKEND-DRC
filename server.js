@@ -39,8 +39,10 @@ import emailLogRoutes from './routes/emailLogRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
 import siteSurveyRoutes from './routes/siteSurveyRoutes.js';
 import helpArticleRoutes from './routes/helpArticleRoutes.js';
+import reportBuilderRoutes from './routes/reportBuilderRoutes.js';
 import { seedDefaultLocations } from './controllers/locationController.js';
 import { seedDefaultHelpArticles } from './controllers/helpArticleController.js';
+import { seedReportBuilderPermissions } from './controllers/reportBuilderController.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { initSocket } from './services/socketService.js';
 
@@ -48,6 +50,7 @@ dotenv.config();
 connectDB().then(() => {
     seedDefaultLocations();
     seedDefaultHelpArticles();
+    seedReportBuilderPermissions();
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -178,6 +181,7 @@ app.use('/api/inspection-requests', inspectionRequestRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/news', newsRoutes);
+app.use('/api/report-builder', reportBuilderRoutes);
 app.use('/api/admin/news', newsRoutes);
 app.use('/api/admin-logs', adminLogRoutes);
 app.use('/api/email-logs', emailLogRoutes);

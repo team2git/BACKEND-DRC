@@ -168,3 +168,28 @@ export const updateAlertSubscription = async (req, res) => {
   }
 };
 
+// Admin: permanently delete a subscription
+// DELETE /api/alert-subscriptions/:id
+export const deleteAlertSubscription = async (req, res) => {
+  try {
+    const doc = await AlertSubscription.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: 'Subscription not found' });
+
+    const before = doc.toObject();
+    await doc.deleteOne();
+    await auditService.logAction({
+      userId: req.user?._id,
+      action: 'ALERT_SUBSCRIPTION_DELETE',
+      resource: 'AlertSubscription',
+      resourceId: doc._id,
+      before,
+      ip: req.ip,
+    });
+
+    res.json({ message: 'Subscription deleted successfully' });
+  } catch (error) {
+    console.error('deleteAlertSubscription error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
