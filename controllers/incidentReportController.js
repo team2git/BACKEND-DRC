@@ -2,6 +2,21 @@ import IncidentReport from '../models/IncidentReport.js';
 import * as auditService from '../services/auditService.js';
 import { emitDashboardEvent } from '../services/socketService.js';
 
+const formatReportLocation = (location = {}) => {
+  const latitude = typeof location.latitude === 'number' && Number.isFinite(location.latitude) ? location.latitude.toFixed(6) : '';
+  const longitude = typeof location.longitude === 'number' && Number.isFinite(location.longitude) ? location.longitude.toFixed(6) : '';
+  if (latitude && longitude) {
+    return [`GPS: ${latitude}, ${longitude}`, location.subCity, location.woreda, location.placeName]
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  const fallbackParts = [location.subCity, location.woreda, location.placeName].filter(Boolean);
+  if (fallbackParts.length > 0) return fallbackParts.join(', ');
+
+  return 'Location unspecified';
+};
+
 const sanitizeIncomingPayload = (payload) => {
   const clean = payload && typeof payload === 'object' ? { ...payload } : {};
   delete clean._id;
@@ -103,7 +118,7 @@ export const createIncidentReportPublic = async (req, res) => {
       emitDashboardEvent('alert:critical', {
         title: 'CRITICAL INCIDENT REPORTED',
         category: doc.category || 'Emergency',
-        location: doc.location?.addressLine || doc.location?.city || 'Location unspecified',
+        location: formatReportLocation(doc.location),
         severity: 'critical',
         reportCode: doc.reportCode,
         createdAt: doc.createdAt
